@@ -2,6 +2,7 @@ import { join, dirname } from "path"
 import { rename } from "fs/promises"
 import { PATHS } from "../shared/paths"
 import { LaunchctlError, FriendlyError, launchctlHint } from "../shared/errors"
+import { mkdirSync } from "node:fs"
 
 export interface AgentStatus {
   running: boolean
@@ -19,6 +20,7 @@ function xmlEscape(s: string): string {
 }
 
 export function generatePlist(binaryPath: string): string {
+  try { mkdirSync(dirname(PATHS.logFile), { recursive: true }) } catch {}
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -30,6 +32,10 @@ export function generatePlist(binaryPath: string): string {
         <string>${xmlEscape(binaryPath)}</string>
         <string>daemon</string>
     </array>
+    <key>StandardOutPath</key>
+    <string>${xmlEscape(PATHS.logFile)}</string>
+    <key>StandardErrorPath</key>
+    <string>${xmlEscape(PATHS.logFile)}</string>
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>

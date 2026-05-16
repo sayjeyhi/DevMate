@@ -7,6 +7,7 @@ import { loadConfig, configExists, writeConfig } from "../config/loader"
 import { runWizard } from "../config/wizard"
 import { agentStatus, writePlist, loadAgent } from "../daemon/launchd"
 import { stopCommand } from "./stop"
+import { appendToLogFile } from "../logger/index"
 
 async function preflight(): Promise<void> {
   if (process.platform !== "darwin") {
@@ -57,6 +58,7 @@ export async function startCommand(): Promise<void> {
   while (Date.now() < deadline) {
     const s = await agentStatus()
     if (s.running) {
+      appendToLogFile(PATHS.logFile, "info", "service started", { pid: s.pid, via: "devmate start" })
       process.stdout.write(`devmate started (PID ${s.pid})\n`)
       return
     }

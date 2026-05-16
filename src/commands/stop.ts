@@ -2,6 +2,8 @@ import { defineCommand } from "citty"
 import { unloadAgent } from "../daemon/launchd"
 import { removePid } from "../daemon/pid"
 import { FriendlyError, LaunchctlError } from "../shared/errors"
+import { appendToLogFile } from "../logger/index"
+import { PATHS } from "../shared/paths"
 
 export async function stopCommand(): Promise<void> {
   try {
@@ -13,6 +15,7 @@ export async function stopCommand(): Promise<void> {
     throw err
   }
   await removePid()
+  appendToLogFile(PATHS.logFile, "info", "service stopped", { via: "devmate stop" })
   process.stdout.write("devmate stopped\n")
 }
 

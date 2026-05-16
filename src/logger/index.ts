@@ -1,3 +1,6 @@
+import { mkdirSync, appendFileSync } from "node:fs"
+import { dirname } from "node:path"
+
 export interface Logger {
   info(msg: string, meta?: object): void
   error(msg: string, meta?: object): void
@@ -25,7 +28,8 @@ const LEVEL_COLOR: Record<Level, string> = {
 
 export function createLogger(
   level: "info" | "debug" | "error",
-  mode?: "tty" | "json"
+  mode?: "tty" | "json",
+  logFilePath?: string
 ): Logger {
   const useColor =
     process.env.NO_COLOR === undefined &&
@@ -35,12 +39,21 @@ export function createLogger(
 
   const effectiveMode = mode ?? (process.stdout.isTTY ? "tty" : "json")
 
+  if (logFilePath) {
+    try { mkdirSync(dirname(logFilePath), { recursive: true }) } catch {}
+  }
+
   function emit(msgLevel: Level, msg: string, meta?: object): void {
     if (LEVEL_PRIORITY[msgLevel] < LEVEL_PRIORITY[level as Level]) return
 
+    const jsonLine = JSON.stringify({ level: msgLevel, ts: new Date().toISOString(), msg, ...meta })
+
+    if (logFilePath) {
+      try { appendFileSync(logFilePath, jsonLine + "\n") } catch {}
+    }
+
     if (effectiveMode === "json") {
-      const line = JSON.stringify({ level: msgLevel, ts: new Date().toISOString(), msg, ...meta })
-      process.stdout.write(line + "\n")
+      process.stdout.write(jsonLine + "\n")
     } else {
       const label = msgLevel.toUpperCase().padEnd(5)
       const colored =
@@ -58,4 +71,17 @@ export function createLogger(
     warn: (msg, meta) => emit("warn", msg, meta),
     debug: (msg, meta) => emit("debug", msg, meta),
   }
+}
+
+export function appendToLogFile(
+  logFilePath: string,
+  level: Level,
+  msg: string,
+  meta?: object
+): void {
+  try {
+    mkdirSync(dirname(logFilePath), { recursive: true })
+    const line = JSON.stringify({ level, ts: new Date().toISOString(), msg, ...meta })
+    appendFileSync(logFilePath, line + "\n")
+  } catch {}
 }
