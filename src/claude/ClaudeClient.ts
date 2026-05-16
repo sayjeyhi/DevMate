@@ -37,6 +37,7 @@ export class ClaudeClient {
       '--print',
       '--bare',
       '--no-session-persistence',
+      '--dangerously-skip-permissions',
       '--output-format',
       'json',
     ]

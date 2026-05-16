@@ -139,7 +139,7 @@ export class JiraClient {
   async getMyIssues(limit = 10): Promise<JiraIssue[]> {
     const response = await this.request<{
       issues: Array<{ key: string; fields: { summary: string; status: { name: string } } }>
-    }>('POST', 'search', {
+    }>('POST', 'search/jql', {
       jql: 'assignee = currentUser() ORDER BY updated DESC',
       maxResults: limit,
       fields: ['summary', 'status'],
