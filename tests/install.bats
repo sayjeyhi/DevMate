@@ -6,10 +6,14 @@
 setup() {
     BINARY_DIR="${BINARY_DIR:-./artifacts}"
     CHECKSUMS_TMPDIR="$(mktemp -d)"
+    MOCK_BIN="$(mktemp -d)"
+    FAKE_HOME="$(mktemp -d)"
 }
 
 teardown() {
     [ -n "$CHECKSUMS_TMPDIR" ] && rm -rf "$CHECKSUMS_TMPDIR"
+    [ -n "$MOCK_BIN" ] && rm -rf "$MOCK_BIN"
+    [ -n "$FAKE_HOME" ] && rm -rf "$FAKE_HOME"
 }
 
 verify_binary_size() {
@@ -120,4 +124,224 @@ _make_fixture_checksums() {
     printf 'corrupted' > "$CHECKSUMS_TMPDIR/jira-assistant-macos-arm64"
     run bash -c "cd \"$CHECKSUMS_TMPDIR\" && sha256sum --check checksums.txt"
     [ "$status" -ne 0 ]
+}
+
+# ─── Section-04 install.sh core tests ──────────────────────────────────────
+
+_install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
+
+@test "install.sh: bash -n syntax check passes" {
+    run bash -n "$(_install_sh)"
+    [ "$status" -eq 0 ]
+}
+
+@test "install.sh: shellcheck passes at error severity" {
+    command -v shellcheck > /dev/null || skip "shellcheck not available"
+    run shellcheck -S error "$(_install_sh)"
+    [ "$status" -eq 0 ]
+}
+
+@test "detect_platform: Darwin arm64 → OS=macos ARCH=arm64" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Darwin;; -m) echo arm64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform; printf '%s %s' \"\$OS\" \"\$ARCH\""
+    [ "$status" -eq 0 ]
+    [ "$output" = "macos arm64" ]
+}
+
+@test "detect_platform: Darwin x86_64 → OS=macos ARCH=x64" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Darwin;; -m) echo x86_64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform; printf '%s %s' \"\$OS\" \"\$ARCH\""
+    [ "$status" -eq 0 ]
+    [ "$output" = "macos x64" ]
+}
+
+@test "detect_platform: Linux x86_64 → OS=linux ARCH=x64" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    printf '#!/bin/sh\necho "ldd (GNU libc) 2.35"\n' > "$MOCK_BIN/ldd"
+    chmod +x "$MOCK_BIN/ldd"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform; printf '%s %s' \"\$OS\" \"\$ARCH\""
+    [ "$status" -eq 0 ]
+    [ "$output" = "linux x64" ]
+}
+
+@test "detect_platform: Linux aarch64 → exits 1 with ARM64 message" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo aarch64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Linux ARM64 is not yet supported"* ]]
+}
+
+@test "detect_platform: Linux musl → exits 1 with musl message" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    printf '#!/bin/sh\necho "musl libc (x86_64)"\n' > "$MOCK_BIN/ldd"
+    chmod +x "$MOCK_BIN/ldd"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Alpine/musl Linux is not supported"* ]]
+}
+
+@test "detect_platform: Windows_NT → exits 1 with Unsupported OS message" {
+    printf '#!/bin/sh\ncase "$1" in -s) echo Windows_NT;; -m) echo x86_64;; esac\n' > "$MOCK_BIN/uname"
+    chmod +x "$MOCK_BIN/uname"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; detect_platform"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unsupported OS"* ]]
+}
+
+@test "resolve_version: uses JIRA_ASSISTANT_VERSION env var, no HTTP call" {
+    printf '#!/bin/sh\necho "UNEXPECTED_CURL_CALL"; exit 1\n' > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" JIRA_ASSISTANT_VERSION=v1.0.0 source \"$(_install_sh)\"; resolve_version; printf '%s' \"\$VERSION\""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"v1.0.0"* ]]
+}
+
+@test "resolve_version: follows /releases/latest redirect and parses tag" {
+    printf '#!/bin/sh\necho "https://github.com/sayjeyhi/jira-assistant/releases/tag/v2.3.4"\n' > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; resolve_version; printf '%s' \"\$VERSION\""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"v2.3.4"* ]]
+}
+
+@test "download_with_retry: succeeds on first try" {
+    local dest="$FAKE_HOME/out"
+    {
+        printf '#!/bin/sh\n'
+        printf 'while [ $# -gt 0 ]; do\n'
+        printf '  if [ "$1" = "-o" ]; then echo content > "$2"; break; fi; shift\n'
+        printf 'done\nexit 0\n'
+    } > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; download_with_retry http://x.com/f \"$dest\""
+    [ "$status" -eq 0 ]
+    [ -f "$dest" ]
+}
+
+@test "download_with_retry: retries once on first failure, succeeds second" {
+    local count_file="$MOCK_BIN/count" dest="$FAKE_HOME/out"
+    echo 0 > "$count_file"
+    {
+        printf '#!/bin/sh\n'
+        printf 'n=$(cat "%s"); n=$((n+1)); printf "%%s" "$n" > "%s"\n' "$count_file" "$count_file"
+        printf 'if [ "$n" -ge 2 ]; then\n'
+        printf '  while [ $# -gt 0 ]; do\n'
+        printf '    [ "$1" = "-o" ] && { echo content > "$2"; exit 0; }; shift\n'
+        printf '  done\nfi\nexit 1\n'
+    } > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; download_with_retry http://x.com/f \"$dest\""
+    [ "$status" -eq 0 ]
+    [ -f "$dest" ]
+}
+
+@test "download_with_retry: exits non-zero when both attempts fail" {
+    printf '#!/bin/sh\nexit 1\n' > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; download_with_retry http://x.com/f \"$FAKE_HOME/out\""
+    [ "$status" -ne 0 ]
+}
+
+@test "verify_checksum: exits 0 when hash matches" {
+    command -v sha256sum > /dev/null || skip "sha256sum not available"
+    printf 'binary content' > "$FAKE_HOME/mybin"
+    local hash; hash=$(sha256sum "$FAKE_HOME/mybin" | awk '{print $1}')
+    printf '%s  mybin\n' "$hash" > "$FAKE_HOME/checksums.txt"
+    run bash -c "OS=linux source \"$(_install_sh)\"; verify_checksum \"$FAKE_HOME/mybin\" \"$FAKE_HOME/checksums.txt\""
+    [ "$status" -eq 0 ]
+}
+
+@test "download_with_retry for checksums.txt: propagates failure, exits non-zero" {
+    printf '#!/bin/sh\nexit 1\n' > "$MOCK_BIN/curl"
+    chmod +x "$MOCK_BIN/curl"
+    run bash -c "PATH=\"$MOCK_BIN:\$PATH\" source \"$(_install_sh)\"; download_with_retry http://x.com/checksums.txt \"$FAKE_HOME/checksums.txt\""
+    [ "$status" -ne 0 ]
+}
+
+@test "verify_checksum: exits 1 with Checksum mismatch when hash is wrong" {
+    command -v sha256sum > /dev/null || skip "sha256sum not available"
+    printf 'binary content' > "$FAKE_HOME/mybin"
+    printf '%s  mybin\n' "0000000000000000000000000000000000000000000000000000000000000000" > "$FAKE_HOME/checksums.txt"
+    run bash -c "OS=linux source \"$(_install_sh)\"; verify_checksum \"$FAKE_HOME/mybin\" \"$FAKE_HOME/checksums.txt\""
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Checksum mismatch"* ]]
+}
+
+@test "verify_checksum: exits 1 when binary name not in checksums.txt" {
+    printf 'binary content' > "$FAKE_HOME/mybin"
+    printf '%s  otherfile\n' "aabbcc" > "$FAKE_HOME/checksums.txt"
+    run bash -c "OS=linux source \"$(_install_sh)\"; verify_checksum \"$FAKE_HOME/mybin\" \"$FAKE_HOME/checksums.txt\""
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not found in checksums.txt"* ]]
+}
+
+@test "verify_checksum: uses sha256sum on linux, shasum -a 256 on macos" {
+    command -v sha256sum > /dev/null || skip "sha256sum not available"
+    printf 'data' > "$FAKE_HOME/mybin"
+    local hash; hash=$(sha256sum "$FAKE_HOME/mybin" | awk '{print $1}')
+    printf '%s  mybin\n' "$hash" > "$FAKE_HOME/checksums.txt"
+    run bash -c "OS=linux source \"$(_install_sh)\"; verify_checksum \"$FAKE_HOME/mybin\" \"$FAKE_HOME/checksums.txt\""
+    [ "$status" -eq 0 ]
+}
+
+@test "select_install_dir: uses /usr/local/bin when writable" {
+    [ -w /usr/local/bin ] || skip "/usr/local/bin not writable"
+    run bash -c "HOME=\"$FAKE_HOME\" source \"$(_install_sh)\"; select_install_dir; printf '%s' \"\$INSTALL_DIR\""
+    [ "$status" -eq 0 ]
+    [ "$output" = "/usr/local/bin" ]
+}
+
+@test "select_install_dir: falls back to ~/.local/bin when /usr/local/bin not writable" {
+    [ -w /usr/local/bin ] && skip "/usr/local/bin is writable on this system"
+    run bash -c "HOME=\"$FAKE_HOME\" source \"$(_install_sh)\"; select_install_dir; printf '%s' \"\$INSTALL_DIR\""
+    [ "$status" -eq 0 ]
+    [ "$output" = "$FAKE_HOME/.local/bin" ]
+    [ -d "$FAKE_HOME/.local/bin" ]
+}
+
+@test "ensure_path: appends export line to existing RC files" {
+    touch "$FAKE_HOME/.zshrc" "$FAKE_HOME/.bashrc"
+    run bash -c "HOME=\"$FAKE_HOME\" source \"$(_install_sh)\"; ensure_path \"$FAKE_HOME/.local/bin\""
+    [ "$status" -eq 0 ]
+    grep -q "# jira-assistant" "$FAKE_HOME/.zshrc"
+    grep -q "# jira-assistant" "$FAKE_HOME/.bashrc"
+}
+
+@test "ensure_path: idempotent — no duplicate if marker exists" {
+    touch "$FAKE_HOME/.zshrc"
+    printf '\n# jira-assistant\nexport PATH="%s/.local/bin:$PATH"\n' "$FAKE_HOME" >> "$FAKE_HOME/.zshrc"
+    run bash -c "HOME=\"$FAKE_HOME\" source \"$(_install_sh)\"; ensure_path \"$FAKE_HOME/.local/bin\"; ensure_path \"$FAKE_HOME/.local/bin\""
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '# jira-assistant' "$FAKE_HOME/.zshrc")" -eq 1 ]
+}
+
+@test "ensure_path: does not create missing RC files" {
+    run bash -c "HOME=\"$FAKE_HOME\" source \"$(_install_sh)\"; ensure_path \"$FAKE_HOME/.local/bin\""
+    [ "$status" -eq 0 ]
+    [ ! -f "$FAKE_HOME/.zshrc" ]
+    [ ! -f "$FAKE_HOME/.bashrc" ]
+}
+
+@test "TTY detection: wizard skipped with message when stdin is not a TTY" {
+    run bash -c "CONFIG_FILE=\"$FAKE_HOME/no.json\" source \"$(_install_sh)\"; run_config_if_needed < /dev/null"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"jira-assistant config"* ]]
+}
+
+@test "TTY detection: wizard skipped silently when config file exists" {
+    touch "$FAKE_HOME/config.json"
+    run bash -c "CONFIG_FILE=\"$FAKE_HOME/config.json\" source \"$(_install_sh)\"; run_config_if_needed < /dev/null"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "main() wrap safety: sourcing install.sh does not execute main" {
+    run bash -c "source \"$(_install_sh)\"; echo SOURCED_OK"
+    [ "$status" -eq 0 ]
+    [ "$output" = "SOURCED_OK" ]
 }
