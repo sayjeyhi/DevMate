@@ -92,9 +92,9 @@ ensure_path() {
 
 download_with_retry() {
   local url="$1" dest="$2"
-  if ! curl -fsSL --fail-with-body -o "$dest" "$url"; then
+  if ! curl -fsSL -o "$dest" "$url"; then
     echo "Download failed, retrying..." >&2
-    if ! curl -fsSL --fail-with-body -o "$dest" "$url"; then
+    if ! curl -fsSL -o "$dest" "$url"; then
       echo "Download failed after retry: $url" >&2
       exit 1
     fi
