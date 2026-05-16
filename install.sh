@@ -106,7 +106,7 @@ verify_checksum() {
   local name expected actual
 
   name=$(basename "$binary")
-  expected=$(grep "  ${name}$" "$checksums_file" | awk '{print $1}')
+  expected=$(grep "  ${name}$" "$checksums_file" | awk '{print $1}' || true)
   if [[ -z "$expected" ]]; then
     echo "Binary name '$name' not found in checksums.txt" >&2
     exit 1

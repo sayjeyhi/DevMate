@@ -10,6 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        run: shellcheck install.sh
+        run: shellcheck -S error install.sh
       - name: bash syntax check
         run: bash -n install.sh
+      - name: Install bats
+        run: sudo apt-get install -y bats
+      - name: Run install.sh unit tests
+        run: bats tests/install.bats
