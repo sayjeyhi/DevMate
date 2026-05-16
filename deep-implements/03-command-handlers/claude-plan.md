@@ -2,7 +2,7 @@
 
 ## Overview
 
-This module is the orchestration layer of a personal Jira assistant Telegram bot. It receives Telegram slash commands (`/create`, `/move`, `/comment`, `/solve`, `/help`), routes them to dedicated handlers, calls the pre-built Jira and Claude integration clients, and returns user-facing replies. The module is the "glue" layer — it does not speak to Jira or Claude directly; that work is handled by `../02-integration-clients`.
+This module is the orchestration layer of a personal Dev assistant Telegram bot. It receives Telegram slash commands (`/create`, `/move`, `/comment`, `/solve`, `/help`), routes them to dedicated handlers, calls the pre-built Jira and Claude integration clients, and returns user-facing replies. The module is the "glue" layer — it does not speak to Jira or Claude directly; that work is handled by `../02-integration-clients`.
 
 The implementation targets TypeScript/Node.js and uses **grammY** as the Telegram bot framework, chosen for its first-class TypeScript support, active maintenance, and rich plugin ecosystem. The bot is single-user or small-team (not public), governed by an allowlist of Telegram user IDs.
 

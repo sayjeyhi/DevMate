@@ -2,7 +2,7 @@
 
 ## What This Is
 
-The foundational layer of the Jira Assistant — a Bun-based TypeScript CLI that starts a background daemon (macOS launchd), manages a TOML config file, and runs a first-time setup wizard.
+The foundational layer of the DevMate — a Bun-based TypeScript CLI that starts a background daemon (macOS launchd), manages a TOML config file, and runs a first-time setup wizard.
 
 Everything else (`02-integration-clients`, `03-command-handlers`) depends on this.
 

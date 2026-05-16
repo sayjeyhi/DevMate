@@ -52,9 +52,16 @@ export async function startBotFromConfig(
 
   await registerCommands(bot, { jira, claude })
 
-  bot.on("message:text", ctx => {
+  bot.on("message:text", async ctx => {
     if (ctx.message.text.startsWith("/")) {
       return ctx.reply("Unknown command. Try /help")
+    }
+    try {
+      const response = await claude.ask(ctx.message.text)
+      await ctx.reply(response)
+    } catch (err) {
+      logger.error("claude reply error", { message: (err as Error).message })
+      await ctx.reply("Failed to get a response from Claude. Please try again.")
     }
   })
 
@@ -108,9 +115,16 @@ export async function startBot(): Promise<void> {
   bot.use(createAuthMiddleware(config.allowedUserIds))
   await registerCommands(bot, { jira, claude })
 
-  bot.on("message:text", ctx => {
+  bot.on("message:text", async ctx => {
     if (ctx.message.text.startsWith("/")) {
       return ctx.reply("Unknown command. Try /help")
+    }
+    try {
+      const response = await claude.ask(ctx.message.text)
+      await ctx.reply(response)
+    } catch (err) {
+      console.error({ event: "claude_reply_error", message: (err as Error).message })
+      await ctx.reply("Failed to get a response from Claude. Please try again.")
     }
   })
 

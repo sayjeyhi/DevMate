@@ -2,7 +2,7 @@
 
 ## What Was Built
 
-A Telegram bot that acts as a Jira assistant, powered by Claude AI. Users send slash commands to the bot to create, update, and analyze Jira issues.
+A Telegram bot that acts as a Dev assistant, powered by Claude AI. Users send slash commands to the bot to create, update, and analyze Jira issues.
 
 ## Quick Start
 

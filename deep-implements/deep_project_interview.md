@@ -1,6 +1,6 @@
 # Deep Project Interview Transcript
 
-## Project: Jira Assistant (Bun CLI + Telegram Bot + Daemon)
+## Project: DevMate (Bun CLI + Telegram Bot + Daemon)
 
 ---
 

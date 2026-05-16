@@ -204,7 +204,7 @@ register_linux_service() {
   mkdir -p "$unit_dir"
   cat > "$unit_path" <<EOF
 [Unit]
-Description=Jira Assistant Telegram Bot
+Description=DevMate Telegram Bot
 After=network.target
 
 [Service]

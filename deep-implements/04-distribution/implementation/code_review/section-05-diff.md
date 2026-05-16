@@ -54,7 +54,7 @@ index e75fb11..b297756 100644
 +  mkdir -p "$unit_dir"
 +  cat > "$unit_path" <<EOF
 +[Unit]
-+Description=Jira Assistant Telegram Bot
++Description=DevMate Telegram Bot
 +After=network.target
 +
 +[Service]

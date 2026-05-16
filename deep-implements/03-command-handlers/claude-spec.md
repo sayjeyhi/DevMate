@@ -2,7 +2,7 @@
 
 ## What This Module Does
 
-Implements the Telegram bot command layer for a Jira assistant. Registers slash commands with grammY, routes each command to a dedicated handler, wires the handler to pre-built Jira and Claude integration clients, and returns user-friendly replies. This is the main daemon loop that ties the whole system together.
+Implements the Telegram bot command layer for a Dev assistant. Registers slash commands with grammY, routes each command to a dedicated handler, wires the handler to pre-built Jira and Claude integration clients, and returns user-friendly replies. This is the main daemon loop that ties the whole system together.
 
 ---
 

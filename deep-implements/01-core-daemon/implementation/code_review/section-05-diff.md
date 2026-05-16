@@ -288,7 +288,7 @@ index 0000000..12608fd
 +  meta: {
 +    name: "jira-assistant",
 +    version: __VERSION__,
-+    description: "Manage your Jira assistant Telegram bot daemon",
++    description: "Manage your Dev assistant Telegram bot daemon",
 +  },
 +  subCommands: {
 +    start:  () => import("./commands/start").then(m => m.default),
