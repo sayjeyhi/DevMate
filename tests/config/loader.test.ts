@@ -38,7 +38,7 @@ const VALID_CONFIG: AppConfig = {
 let tmpDir: string
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "jira-assistant-test-"))
+  tmpDir = await mkdtemp(join(tmpdir(), "devmate-test-"))
 })
 
 afterEach(async () => {
@@ -91,12 +91,12 @@ binary_path = "/usr/bin/claude"
     expect(err).toBeInstanceOf(FriendlyError)
   })
 
-  it("throws FriendlyError with jira-assistant config hint when file not found", async () => {
+  it("throws FriendlyError with devmate config hint when file not found", async () => {
     let err: unknown
     try { await loadConfig("/nonexistent/path/config.toml") } catch (e) { err = e }
     expect(err).toBeInstanceOf(FriendlyError)
     const friendly = err as FriendlyError
-    expect(friendly.message).toContain("jira-assistant config")
+    expect(friendly.message).toContain("devmate config")
   })
 })
 

@@ -41,14 +41,14 @@ describe("LaunchctlError", () => {
 })
 
 describe("launchctlHint", () => {
-  it("maps 'No such file or directory' to jira-assistant start hint", () => {
+  it("maps 'No such file or directory' to devmate start hint", () => {
     const hint = launchctlHint("error: No such file or directory")
-    expect(hint).toContain("jira-assistant start")
+    expect(hint).toContain("devmate start")
   })
 
-  it("maps 'Operation already in progress' to jira-assistant status hint", () => {
+  it("maps 'Operation already in progress' to devmate status hint", () => {
     const hint = launchctlHint("error: Operation already in progress")
-    expect(hint).toContain("jira-assistant status")
+    expect(hint).toContain("devmate status")
   })
 
   it("maps 'Permission denied' to file permissions hint", () => {

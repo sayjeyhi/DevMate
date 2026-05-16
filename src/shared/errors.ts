@@ -19,10 +19,10 @@ export class LaunchctlError extends FriendlyError {
 export function launchctlHint(stderr: string): string {
   const s = stderr.toLowerCase()
   if (s.includes("no such file or directory")) {
-    return "Make sure you ran `jira-assistant start` first"
+    return "Make sure you ran `devmate start` first"
   }
   if (s.includes("operation already in progress")) {
-    return "Daemon may already be running; check `jira-assistant status`"
+    return "Daemon may already be running; check `devmate status`"
   }
   if (s.includes("permission denied")) {
     return "Check file permissions on the plist"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="sayjeyhi/jira-assistant"
-CONFIG_FILE="${HOME}/.config/jira-assistant/config.json"
+REPO="sayjeyhi/DevMate"
+CONFIG_FILE="${HOME}/.config/devmate/config.json"
 TMP_DIR=""
 
 detect_platform() {
@@ -39,12 +39,12 @@ detect_platform() {
 }
 
 build_binary_name() {
-  BINARY="jira-assistant-${OS}-${ARCH}"
+  BINARY="devmate-${OS}-${ARCH}"
 }
 
 resolve_version() {
-  if [[ -n "${JIRA_ASSISTANT_VERSION:-}" ]]; then
-    VERSION="$JIRA_ASSISTANT_VERSION"
+  if [[ -n "${DEVMATE_VERSION:-}" ]]; then
+    VERSION="$DEVMATE_VERSION"
   else
     local url
     url=$(curl -fsSL -o /dev/null -w "%{url_effective}" \
@@ -56,9 +56,9 @@ resolve_version() {
 
 stop_existing_service() {
   if [[ "$OS" == "macos" ]]; then
-    launchctl unload "${HOME}/Library/LaunchAgents/com.jira-assistant.plist" 2>/dev/null || true
+    launchctl unload "${HOME}/Library/LaunchAgents/com.devmate.plist" 2>/dev/null || true
   else
-    systemctl --user stop jira-assistant 2>/dev/null || true
+    systemctl --user stop devmate 2>/dev/null || true
   fi
 }
 
@@ -69,9 +69,9 @@ select_install_dir() {
     INSTALL_DIR="${HOME}/.local/bin"
     mkdir -p "$INSTALL_DIR"
   fi
-  if command -v jira-assistant &>/dev/null; then
+  if command -v devmate &>/dev/null; then
     local prev_dir
-    prev_dir=$(dirname "$(command -v jira-assistant)")
+    prev_dir=$(dirname "$(command -v devmate)")
     if [[ "$prev_dir" != "$INSTALL_DIR" ]]; then
       echo "Warning: previous install found at $prev_dir — there may be a stale binary." >&2
     fi
@@ -80,7 +80,7 @@ select_install_dir() {
 
 ensure_path() {
   local dir="$1"
-  local marker="# jira-assistant"
+  local marker="# devmate"
   local rc
   for rc in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
     if [[ -f "$rc" ]] && ! grep -qF "$marker" "$rc"; then
@@ -140,16 +140,16 @@ run_config_if_needed() {
     return 0
   fi
   if [[ ! -t 0 ]]; then
-    echo "Run \`jira-assistant config\` to complete setup."
+    echo "Run \`devmate config\` to complete setup."
     return 0
   fi
-  jira-assistant config
+  devmate config
 }
 
 print_success() {
   echo ""
-  echo "jira-assistant ${VERSION} installed successfully!"
-  echo "  Binary:  $INSTALL_DIR/jira-assistant"
+  echo "devmate ${VERSION} installed successfully!"
+  echo "  Binary:  $INSTALL_DIR/devmate"
   echo "  Service: ${SERVICE_STATUS:-registered}"
   if [[ "${PATH_MODIFIED:-false}" == "true" ]]; then
     echo "  PATH: $INSTALL_DIR added — restart your shell or run: source ~/.zshrc"
@@ -159,7 +159,7 @@ print_success() {
 register_macos_service() {
   local binary_path="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
-  local plist_path="$plist_dir/com.jira-assistant.plist"
+  local plist_path="$plist_dir/com.devmate.plist"
   mkdir -p "$plist_dir"
   mkdir -p "$HOME/Library/Logs"
   launchctl unload "$plist_path" 2>/dev/null || true
@@ -170,7 +170,7 @@ register_macos_service() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jira-assistant</string>
+    <string>com.devmate</string>
     <key>ProgramArguments</key>
     <array>
         <string>${binary_path}</string>
@@ -188,9 +188,9 @@ register_macos_service() {
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>${HOME}/Library/Logs/jira-assistant.log</string>
+    <string>${HOME}/Library/Logs/devmate.log</string>
     <key>StandardErrorPath</key>
-    <string>${HOME}/Library/Logs/jira-assistant.log</string>
+    <string>${HOME}/Library/Logs/devmate.log</string>
 </dict>
 </plist>
 EOF
@@ -200,7 +200,7 @@ EOF
 register_linux_service() {
   local binary_path="$1"
   local unit_dir="$HOME/.config/systemd/user"
-  local unit_path="$unit_dir/jira-assistant.service"
+  local unit_path="$unit_dir/devmate.service"
   mkdir -p "$unit_dir"
   cat > "$unit_path" <<EOF
 [Unit]
@@ -219,25 +219,25 @@ StartLimitBurst=5
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now jira-assistant
+  systemctl --user enable --now devmate
   echo
-  echo "Optional: to start jira-assistant at boot even when you are not logged in, run:"
+  echo "Optional: to start devmate at boot even when you are not logged in, run:"
   echo "  loginctl enable-linger $(id -un)"
   echo "Note: this may require sudo on some systems."
 }
 
 start_service() {
   if [[ "$OS" == "macos" ]]; then
-    if launchctl list 2>/dev/null | grep -q "com.jira-assistant"; then
+    if launchctl list 2>/dev/null | grep -q "com.devmate"; then
       echo "Service running (launchd)."
     else
-      echo "Service not detected in launchd — check ~/Library/LaunchAgents/com.jira-assistant.plist"
+      echo "Service not detected in launchd — check ~/Library/LaunchAgents/com.devmate.plist"
     fi
   else
-    if systemctl --user is-active jira-assistant &>/dev/null; then
+    if systemctl --user is-active devmate &>/dev/null; then
       echo "Service running (systemd)."
     else
-      echo "Service not detected — check: systemctl --user status jira-assistant"
+      echo "Service not detected — check: systemctl --user status devmate"
     fi
   fi
 }
@@ -246,14 +246,14 @@ do_uninstall() {
   detect_platform
   stop_existing_service
   if [[ "$OS" == "macos" ]]; then
-    rm -f "${HOME}/Library/LaunchAgents/com.jira-assistant.plist"
+    rm -f "${HOME}/Library/LaunchAgents/com.devmate.plist"
   else
-    systemctl --user disable jira-assistant 2>/dev/null || true
-    rm -f "${HOME}/.config/systemd/user/jira-assistant.service"
+    systemctl --user disable devmate 2>/dev/null || true
+    rm -f "${HOME}/.config/systemd/user/devmate.service"
   fi
-  rm -f /usr/local/bin/jira-assistant
-  rm -f "${HOME}/.local/bin/jira-assistant"
-  echo "Config files at ~/.config/jira-assistant/ were left in place. Remove manually if desired."
+  rm -f /usr/local/bin/devmate
+  rm -f "${HOME}/.local/bin/devmate"
+  echo "Config files at ~/.config/devmate/ were left in place. Remove manually if desired."
   echo "PATH entries added to shell RC files must be cleaned up manually."
   exit 0
 }
@@ -266,7 +266,7 @@ main() {
       --uninstall) do_uninstall; exit 0 ;;
       --help)
         echo "Usage: install.sh [--uninstall] [--help]"
-        echo "  JIRA_ASSISTANT_VERSION=vX.Y.Z  install specific version"
+        echo "  DEVMATE_VERSION=vX.Y.Z  install specific version"
         exit 0
         ;;
     esac
@@ -291,13 +291,13 @@ main() {
   download_with_retry "$RELEASE_URL/$BINARY" "$TMP_DIR/$BINARY"
   download_with_retry "$RELEASE_URL/checksums.txt" "$TMP_DIR/checksums.txt"
   verify_checksum "$TMP_DIR/$BINARY" "$TMP_DIR/checksums.txt"
-  install_binary "$TMP_DIR/$BINARY" "$INSTALL_DIR/jira-assistant"
+  install_binary "$TMP_DIR/$BINARY" "$INSTALL_DIR/devmate"
 
   if [[ "$OS" == "macos" ]]; then
-    strip_quarantine "$INSTALL_DIR/jira-assistant"
-    register_macos_service "$INSTALL_DIR/jira-assistant"
+    strip_quarantine "$INSTALL_DIR/devmate"
+    register_macos_service "$INSTALL_DIR/devmate"
   else
-    register_linux_service "$INSTALL_DIR/jira-assistant"
+    register_linux_service "$INSTALL_DIR/devmate"
   fi
 
   run_config_if_needed

@@ -32,7 +32,7 @@ export async function statusCommand(): Promise<void> {
     } catch {}
   }
 
-  const lines: string[] = ["jira-assistant status"]
+  const lines: string[] = ["devmate status"]
   lines.push(`  State:       ${status.running ? "running" : "stopped"}`)
   if (status.running && pid !== null) lines.push(`  PID:         ${pid}`)
   if (status.running && uptime) lines.push(`  Uptime:      ${uptime}`)
@@ -47,7 +47,7 @@ export async function statusCommand(): Promise<void> {
 }
 
 export default defineCommand({
-  meta: { name: "status", description: "Show jira-assistant daemon status" },
+  meta: { name: "status", description: "Show DevMate daemon status" },
   async run() {
     await statusCommand()
   },

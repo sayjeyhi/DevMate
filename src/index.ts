@@ -12,15 +12,16 @@ const appVersion = typeof __VERSION__ !== "undefined" ? __VERSION__ : "0.0.0-dev
 
 const main = defineCommand({
   meta: {
-    name: "jira-assistant",
+    name: "devmate",
     version: appVersion,
-    description: "Manage your Jira assistant Telegram bot daemon",
+    description: "Manage your DevMate Telegram bot daemon",
   },
   subCommands: {
     start:  () => import("./commands/start").then(m => m.default),
     stop:   () => import("./commands/stop").then(m => m.default),
     status: () => import("./commands/status").then(m => m.default),
     config: () => import("./commands/config").then(m => m.default),
+    update: () => import("./commands/update").then(m => m.default),
     daemon: () => import("./commands/daemon").then(m => m.default),
   },
 })

@@ -1,17 +1,17 @@
-# jira-assistant
+# DevMate
 
 A Telegram bot that lets you manage Jira issues from your phone — create, move, comment, and resolve issues without opening a browser.
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sayjeyhi/jira-assistant/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh | bash
 ```
 
 Prefer to review the script before running:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sayjeyhi/jira-assistant/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh -o install.sh
 less install.sh    # review before running
 bash install.sh
 ```
@@ -19,7 +19,7 @@ bash install.sh
 Pin to a specific release (for reproducible installs):
 
 ```bash
-JIRA_ASSISTANT_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/sayjeyhi/jira-assistant/main/install.sh | bash
+DEVMATE_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh | bash
 ```
 
 The installer:
@@ -60,9 +60,9 @@ No runtime is required — the binary is self-contained (compiled with `bun --co
 
 ## Config File
 
-**Location:** `~/.config/jira-assistant/config.json`
+**Location:** `~/.config/devmate/config.json`
 
-The install script runs a configuration wizard on first install. For non-interactive environments (piped `curl | bash`), the wizard is skipped and you are prompted to run `jira-assistant config` to complete setup.
+The install script runs a configuration wizard on first install. For non-interactive environments (piped `curl | bash`), the wizard is skipped and you are prompted to run `devmate config` to complete setup.
 
 ```json
 {
@@ -83,29 +83,29 @@ The config file is created with `chmod 600` (user-read-only) by the configuratio
 To reconfigure at any time:
 
 ```bash
-jira-assistant config
+devmate config
 ```
 
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sayjeyhi/jira-assistant/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh | bash -s -- --uninstall
 ```
 
 The uninstall command:
 - Stops and removes the service (launchd on macOS, systemd on Linux)
 - Removes the binary from `/usr/local/bin` or `~/.local/bin`
-- Does **not** remove config files at `~/.config/jira-assistant/` — remove those manually if desired
+- Does **not** remove config files at `~/.config/devmate/` — remove those manually if desired
 - Does **not** clean up PATH entries added to shell RC files — remove those manually
 
 ## macOS Gatekeeper (Manual Downloads Only)
 
 > This step is **not needed** when using the install script above — the script strips the quarantine attribute automatically.
 
-If you download a binary manually from the [GitHub Releases](https://github.com/sayjeyhi/jira-assistant/releases) page, macOS may block it. To remove the quarantine flag:
+If you download a binary manually from the [GitHub Releases](https://github.com/sayjeyhi/DevMate/releases) page, macOS may block it. To remove the quarantine flag:
 
 ```bash
-xattr -d com.apple.quarantine /usr/local/bin/jira-assistant
+xattr -d com.apple.quarantine /usr/local/bin/devmate
 ```
 
 ## Linux: Start at Boot Without Login
@@ -129,11 +129,11 @@ The install script downloads `checksums.txt` from the same GitHub Release and ve
 Requires **Bun v1.3.11** (pin this version — v1.3.12 has a regression that produces invalid macOS ARM64 code signatures).
 
 ```bash
-git clone https://github.com/sayjeyhi/jira-assistant.git
-cd jira-assistant
+git clone https://github.com/sayjeyhi/DevMate.git
+cd DevMate
 bun install
 # Build for your current platform:
-bun build --compile src/index.ts --outfile jira-assistant
+bun build --compile src/index.ts --outfile devmate
 ```
 
 For cross-compilation targets, refer to the CI workflow matrix (`darwin-arm64`, `darwin-x64`, `linux-x64`) which uses the corresponding `--target=bun-<target>` flags.

@@ -11,7 +11,7 @@ import { stopCommand } from "./stop"
 async function preflight(): Promise<void> {
   if (process.platform !== "darwin") {
     throw new FriendlyError(
-      "jira-assistant requires macOS",
+      "DevMate requires macOS",
       "This tool uses launchd, which is only available on macOS."
     )
   }
@@ -31,7 +31,7 @@ async function preflight(): Promise<void> {
   } catch {
     throw new FriendlyError(
       `Claude binary not executable at ${config.claude.binary_path}`,
-      "Run `which claude` to find the correct path, then update with `jira-assistant config`."
+      "Run `which claude` to find the correct path, then update with `devmate config`."
     )
   }
 }
@@ -57,7 +57,7 @@ export async function startCommand(): Promise<void> {
   while (Date.now() < deadline) {
     const s = await agentStatus()
     if (s.running) {
-      process.stdout.write(`jira-assistant started (PID ${s.pid})\n`)
+      process.stdout.write(`devmate started (PID ${s.pid})\n`)
       return
     }
     await Bun.sleep(200)
@@ -65,14 +65,14 @@ export async function startCommand(): Promise<void> {
 
   const finalStatus = await agentStatus()
   process.stderr.write(
-    `jira-assistant failed to start. Last exit code: ${finalStatus.exitCode ?? "unknown"}\n` +
-    `Hint: check \`jira-assistant status\` or ${PATHS.logFile}\n`
+    `devmate failed to start. Last exit code: ${finalStatus.exitCode ?? "unknown"}\n` +
+    `Hint: check \`devmate status\` or ${PATHS.logFile}\n`
   )
   process.exit(1)
 }
 
 export default defineCommand({
-  meta: { name: "start", description: "Start the jira-assistant daemon" },
+  meta: { name: "start", description: "Start the DevMate daemon" },
   async run() {
     await startCommand()
   },

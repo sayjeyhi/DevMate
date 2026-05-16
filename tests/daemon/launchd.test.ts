@@ -6,13 +6,13 @@ import { generatePlist, writePlist, loadAgent, unloadAgent, agentStatus } from "
 import { PATHS } from "../../src/shared/paths"
 import { LaunchctlError } from "../../src/shared/errors"
 
-const BINARY = "/usr/local/bin/jira-assistant"
+const BINARY = "/usr/local/bin/devmate"
 
 describe("generatePlist", () => {
   it("contains the correct Label key", () => {
     const xml = generatePlist(BINARY)
     expect(xml).toContain("<key>Label</key>")
-    expect(xml).toContain("<string>net.jira-assistant</string>")
+    expect(xml).toContain("<string>net.devmate</string>")
   })
 
   it("contains KeepAlive as a dictionary with SuccessfulExit=false and Crashed=true (not simple boolean true)", () => {
@@ -64,7 +64,7 @@ describe("writePlist", () => {
   it("creates the plist file at PATHS.plistFile", async () => {
     await writePlist(BINARY, testPlistPath)
     const content = await Bun.file(testPlistPath).text()
-    expect(content).toContain("net.jira-assistant")
+    expect(content).toContain("net.devmate")
     expect(content).toContain(BINARY)
   })
 })
@@ -145,7 +145,7 @@ describe("agentStatus", () => {
   })
 
   it("falls back to launchctl list when print fails", async () => {
-    const listOutput = "12345\t0\tnet.jira-assistant\n"
+    const listOutput = "12345\t0\tnet.devmate\n"
     let callCount = 0
     const spawnSpy = spyOn(Bun, "spawn").mockImplementation((() => {
       callCount++
@@ -160,7 +160,7 @@ describe("agentStatus", () => {
   })
 
   it("populates exitCode from launchctl list when process stopped", async () => {
-    const listOutput = "-\t1\tnet.jira-assistant\n"
+    const listOutput = "-\t1\tnet.devmate\n"
     let callCount = 0
     const spawnSpy = spyOn(Bun, "spawn").mockImplementation((() => {
       callCount++

@@ -11,7 +11,7 @@ export async function runWizard(existing?: AppConfig): Promise<AppConfig> {
     )
   }
 
-  intro("jira-assistant setup")
+  intro("DevMate setup")
 
   const result = await group(
     {

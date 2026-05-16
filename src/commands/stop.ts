@@ -13,11 +13,11 @@ export async function stopCommand(): Promise<void> {
     throw err
   }
   await removePid()
-  process.stdout.write("jira-assistant stopped\n")
+  process.stdout.write("devmate stopped\n")
 }
 
 export default defineCommand({
-  meta: { name: "stop", description: "Stop the jira-assistant daemon" },
+  meta: { name: "stop", description: "Stop the DevMate daemon" },
   async run() {
     await stopCommand()
   },

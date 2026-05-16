@@ -24,7 +24,7 @@ export function generatePlist(binaryPath: string): string {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>net.jira-assistant</string>
+    <string>net.devmate</string>
     <key>ProgramArguments</key>
     <array>
         <string>${xmlEscape(binaryPath)}</string>
@@ -93,7 +93,7 @@ function parsePrintOutput(output: string): AgentStatus {
 
 function parseListOutput(output: string): AgentStatus {
   const lines = output.trim().split("\n")
-  const line = lines.find(l => l.split("\t")[2]?.trim() === "net.jira-assistant")
+  const line = lines.find(l => l.split("\t")[2]?.trim() === "net.devmate")
   if (!line) return { running: false }
 
   const [pidStr, exitCodeStr] = line.split("\t")
@@ -114,7 +114,7 @@ export async function agentStatus(): Promise<AgentStatus> {
 
   const { exitCode: printExit, stdout: printOut } = await runLaunchctl([
     "print",
-    `gui/${uid}/net.jira-assistant`,
+    `gui/${uid}/net.devmate`,
   ])
 
   if (printExit === 0) {
@@ -123,7 +123,7 @@ export async function agentStatus(): Promise<AgentStatus> {
 
   const { exitCode: listExit, stdout: listOut } = await runLaunchctl([
     "list",
-    "net.jira-assistant",
+    "net.devmate",
   ])
 
   if (listExit !== 0) {

@@ -17,7 +17,7 @@ export async function configCommand(): Promise<void> {
 }
 
 export default defineCommand({
-  meta: { name: "config", description: "Configure jira-assistant" },
+  meta: { name: "config", description: "Configure DevMate" },
   async run() {
     await configCommand()
   },

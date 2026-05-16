@@ -27,28 +27,28 @@ verify_binary_size() {
 
 @test "macOS arm64 binary: size between 10MB and 500MB" {
     skip "Manual smoke test — requires release binary"
-    local bin="$BINARY_DIR/jira-assistant-macos-arm64"
+    local bin="$BINARY_DIR/devmate-macos-arm64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     verify_binary_size "$bin"
 }
 
 @test "macOS x64 binary: size between 10MB and 500MB" {
     skip "Manual smoke test — requires release binary"
-    local bin="$BINARY_DIR/jira-assistant-macos-x64"
+    local bin="$BINARY_DIR/devmate-macos-x64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     verify_binary_size "$bin"
 }
 
 @test "Linux x64 binary: size between 10MB and 500MB" {
     skip "Manual smoke test — requires release binary"
-    local bin="$BINARY_DIR/jira-assistant-linux-x64"
+    local bin="$BINARY_DIR/devmate-linux-x64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     verify_binary_size "$bin"
 }
 
 @test "macOS arm64 binary: ad-hoc code signature valid (codesign -v)" {
     skip "Manual smoke test — requires release binary and macOS"
-    local bin="$BINARY_DIR/jira-assistant-macos-arm64"
+    local bin="$BINARY_DIR/devmate-macos-arm64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     run codesign -v "$bin"
     [ "$status" -eq 0 ]
@@ -56,7 +56,7 @@ verify_binary_size() {
 
 @test "macOS x64 binary: ad-hoc code signature valid (codesign -v)" {
     skip "Manual smoke test — requires release binary and macOS"
-    local bin="$BINARY_DIR/jira-assistant-macos-x64"
+    local bin="$BINARY_DIR/devmate-macos-x64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     run codesign -v "$bin"
     [ "$status" -eq 0 ]
@@ -64,7 +64,7 @@ verify_binary_size() {
 
 @test "macOS arm64 binary: executes without SIGKILL (exit code != 137)" {
     skip "Manual smoke test — requires release binary on macOS arm64"
-    local bin="$BINARY_DIR/jira-assistant-macos-arm64"
+    local bin="$BINARY_DIR/devmate-macos-arm64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     chmod +x "$bin"
     run "$bin" --version
@@ -73,7 +73,7 @@ verify_binary_size() {
 
 @test "macOS x64 binary: executes without SIGKILL (exit code != 137)" {
     skip "Manual smoke test — requires release binary on macOS x64"
-    local bin="$BINARY_DIR/jira-assistant-macos-x64"
+    local bin="$BINARY_DIR/devmate-macos-x64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     chmod +x "$bin"
     run "$bin" --version
@@ -82,7 +82,7 @@ verify_binary_size() {
 
 @test "Linux x64 binary: executes successfully on --version" {
     skip "Manual smoke test — requires release binary on Linux x64"
-    local bin="$BINARY_DIR/jira-assistant-linux-x64"
+    local bin="$BINARY_DIR/devmate-linux-x64"
     [ -f "$bin" ] || skip "Binary not found: $bin"
     chmod +x "$bin"
     run "$bin" --version
@@ -92,9 +92,9 @@ verify_binary_size() {
 _make_fixture_checksums() {
     command -v sha256sum > /dev/null || skip "sha256sum not available"
     local dir="$1"
-    printf 'data1' > "$dir/jira-assistant-macos-arm64"
-    printf 'data2' > "$dir/jira-assistant-macos-x64"
-    printf 'data3' > "$dir/jira-assistant-linux-x64"
+    printf 'data1' > "$dir/devmate-macos-arm64"
+    printf 'data2' > "$dir/devmate-macos-x64"
+    printf 'data3' > "$dir/devmate-linux-x64"
     (cd "$dir" && sha256sum * > checksums.txt)
 }
 
@@ -108,9 +108,9 @@ _make_fixture_checksums() {
 
 @test "checksums.txt: all three binary names appear" {
     _make_fixture_checksums "$CHECKSUMS_TMPDIR"
-    grep -q "jira-assistant-macos-arm64" "$CHECKSUMS_TMPDIR/checksums.txt"
-    grep -q "jira-assistant-macos-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
-    grep -q "jira-assistant-linux-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
+    grep -q "devmate-macos-arm64" "$CHECKSUMS_TMPDIR/checksums.txt"
+    grep -q "devmate-macos-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
+    grep -q "devmate-linux-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
 }
 
 @test "sha256sum --check exits 0 when binaries are intact" {
@@ -121,7 +121,7 @@ _make_fixture_checksums() {
 
 @test "sha256sum --check exits non-zero after binary corruption" {
     _make_fixture_checksums "$CHECKSUMS_TMPDIR"
-    printf 'corrupted' > "$CHECKSUMS_TMPDIR/jira-assistant-macos-arm64"
+    printf 'corrupted' > "$CHECKSUMS_TMPDIR/devmate-macos-arm64"
     run bash -c "cd \"$CHECKSUMS_TMPDIR\" && sha256sum --check checksums.txt"
     [ "$status" -ne 0 ]
 }
@@ -193,16 +193,16 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
     [[ "$output" == *"Unsupported OS"* ]]
 }
 
-@test "resolve_version: uses JIRA_ASSISTANT_VERSION env var, no HTTP call" {
+@test "resolve_version: uses DEVMATE_VERSION env var, no HTTP call" {
     printf '#!/bin/sh\necho "UNEXPECTED_CURL_CALL"; exit 1\n' > "$MOCK_BIN/curl"
     chmod +x "$MOCK_BIN/curl"
-    run bash -c "export PATH=\"$MOCK_BIN:\$PATH\"; export JIRA_ASSISTANT_VERSION=v1.0.0; source \"$(_install_sh)\"; resolve_version; printf '%s' \"\$VERSION\""
+    run bash -c "export PATH=\"$MOCK_BIN:\$PATH\"; export DEVMATE_VERSION=v1.0.0; source \"$(_install_sh)\"; resolve_version; printf '%s' \"\$VERSION\""
     [ "$status" -eq 0 ]
     [[ "$output" == *"v1.0.0"* ]]
 }
 
 @test "resolve_version: follows /releases/latest redirect and parses tag" {
-    printf '#!/bin/sh\necho "https://github.com/sayjeyhi/jira-assistant/releases/tag/v2.3.4"\n' > "$MOCK_BIN/curl"
+    printf '#!/bin/sh\necho "https://github.com/sayjeyhi/devmate/releases/tag/v2.3.4"\n' > "$MOCK_BIN/curl"
     chmod +x "$MOCK_BIN/curl"
     run bash -c "export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; resolve_version; printf '%s' \"\$VERSION\""
     [ "$status" -eq 0 ]
@@ -308,16 +308,16 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
     touch "$FAKE_HOME/.zshrc" "$FAKE_HOME/.bashrc"
     run bash -c "export HOME=\"$FAKE_HOME\"; source \"$(_install_sh)\"; ensure_path \"$FAKE_HOME/.local/bin\""
     [ "$status" -eq 0 ]
-    grep -q "# jira-assistant" "$FAKE_HOME/.zshrc"
-    grep -q "# jira-assistant" "$FAKE_HOME/.bashrc"
+    grep -q "# devmate" "$FAKE_HOME/.zshrc"
+    grep -q "# devmate" "$FAKE_HOME/.bashrc"
 }
 
 @test "ensure_path: idempotent — no duplicate if marker exists" {
     touch "$FAKE_HOME/.zshrc"
-    printf '\n# jira-assistant\nexport PATH="%s/.local/bin:$PATH"\n' "$FAKE_HOME" >> "$FAKE_HOME/.zshrc"
+    printf '\n# devmate\nexport PATH="%s/.local/bin:$PATH"\n' "$FAKE_HOME" >> "$FAKE_HOME/.zshrc"
     run bash -c "export HOME=\"$FAKE_HOME\"; source \"$(_install_sh)\"; ensure_path \"$FAKE_HOME/.local/bin\"; ensure_path \"$FAKE_HOME/.local/bin\""
     [ "$status" -eq 0 ]
-    [ "$(grep -c '# jira-assistant' "$FAKE_HOME/.zshrc")" -eq 1 ]
+    [ "$(grep -c '# devmate' "$FAKE_HOME/.zshrc")" -eq 1 ]
 }
 
 @test "ensure_path: does not create missing RC files" {
@@ -330,7 +330,7 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
 @test "TTY detection: wizard skipped with message when stdin is not a TTY" {
     run bash -c "source \"$(_install_sh)\"; CONFIG_FILE=\"$FAKE_HOME/no.json\"; run_config_if_needed < /dev/null"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"jira-assistant config"* ]]
+    [[ "$output" == *"devmate config"* ]]
 }
 
 @test "TTY detection: wizard skipped silently when config file exists" {
@@ -351,33 +351,33 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
 @test "register_macos_service: plist created at correct path" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    [ -f "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist" ]
+    [ -f "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist" ]
 }
 
 @test "register_macos_service: plist contains KeepAlive in dictionary form" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -A1 '<key>KeepAlive</key>' "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist" | grep -q '<dict>'
+    grep -A1 '<key>KeepAlive</key>' "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist" | grep -q '<dict>'
 }
 
 @test "register_macos_service: plist contains ThrottleInterval = 30" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q '<integer>30</integer>' "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist"
+    grep -q '<integer>30</integer>' "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist"
 }
 
 @test "register_macos_service: plist contains RunAtLoad = true" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -A1 '<key>RunAtLoad</key>' "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist" | grep -q '<true/>'
+    grep -A1 '<key>RunAtLoad</key>' "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist" | grep -q '<true/>'
 }
 
 @test "register_macos_service: launchctl unload called before launchctl load" {
@@ -388,7 +388,7 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
         printf 'exit 0\n'
     } > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
     [ "$(sed -n '1p' "$call_log")" = "unload" ]
     [ "$(sed -n '2p' "$call_log")" = "load" ]
@@ -402,49 +402,49 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
         printf 'exit 0\n'
     } > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_macos_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q "load.*com.jira-assistant.plist" "$call_log"
+    grep -q "load.*com.devmate.plist" "$call_log"
 }
 
 @test "register_linux_service: service file created at correct path" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    [ -f "$FAKE_HOME/.config/systemd/user/jira-assistant.service" ]
+    [ -f "$FAKE_HOME/.config/systemd/user/devmate.service" ]
 }
 
 @test "register_linux_service: unit file contains Restart=on-failure" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q 'Restart=on-failure' "$FAKE_HOME/.config/systemd/user/jira-assistant.service"
+    grep -q 'Restart=on-failure' "$FAKE_HOME/.config/systemd/user/devmate.service"
 }
 
 @test "register_linux_service: unit file contains StartLimitIntervalSec=300" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q 'StartLimitIntervalSec=300' "$FAKE_HOME/.config/systemd/user/jira-assistant.service"
+    grep -q 'StartLimitIntervalSec=300' "$FAKE_HOME/.config/systemd/user/devmate.service"
 }
 
 @test "register_linux_service: unit file contains StartLimitBurst=5" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q 'StartLimitBurst=5' "$FAKE_HOME/.config/systemd/user/jira-assistant.service"
+    grep -q 'StartLimitBurst=5' "$FAKE_HOME/.config/systemd/user/devmate.service"
 }
 
 @test "register_linux_service: unit file contains Type=simple" {
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
-    grep -q 'Type=simple' "$FAKE_HOME/.config/systemd/user/jira-assistant.service"
+    grep -q 'Type=simple' "$FAKE_HOME/.config/systemd/user/devmate.service"
 }
 
 @test "register_linux_service: systemctl enable --now called" {
@@ -455,7 +455,7 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
         printf 'exit 0\n'
     } > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
     grep -q -- '--user enable --now' "$call_log"
 }
@@ -468,7 +468,7 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
         printf 'exit 0\n'
     } > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
-    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/jira-assistant\""
+    run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; register_linux_service \"/usr/local/bin/devmate\""
     [ "$status" -eq 0 ]
     grep -q -- '--user daemon-reload' "$call_log"
     local reload_line enable_line
@@ -480,7 +480,7 @@ _install_sh() { printf '%s' "${BATS_TEST_DIRNAME}/../install.sh"; }
 @test "start_service: macOS reports running when service is in launchd" {
     {
         printf '#!/bin/sh\n'
-        printf 'if [ "$1" = "list" ]; then echo "com.jira-assistant"; fi\n'
+        printf 'if [ "$1" = "list" ]; then echo "com.devmate"; fi\n'
         printf 'exit 0\n'
     } > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
@@ -525,48 +525,48 @@ _mock_uname_linux() {
     chmod +x "$MOCK_BIN/uname"
 }
 
-@test "do_uninstall: removes ~/.local/bin/jira-assistant" {
+@test "do_uninstall: removes ~/.local/bin/devmate" {
     mkdir -p "$FAKE_HOME/.local/bin"
-    touch "$FAKE_HOME/.local/bin/jira-assistant"
+    touch "$FAKE_HOME/.local/bin/devmate"
     _mock_uname_darwin
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
     run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; do_uninstall"
     [ "$status" -eq 0 ]
-    [ ! -f "$FAKE_HOME/.local/bin/jira-assistant" ]
+    [ ! -f "$FAKE_HOME/.local/bin/devmate" ]
 }
 
-@test "do_uninstall: removes ~/Library/LaunchAgents/com.jira-assistant.plist on macOS" {
+@test "do_uninstall: removes ~/Library/LaunchAgents/com.devmate.plist on macOS" {
     mkdir -p "$FAKE_HOME/Library/LaunchAgents"
-    touch "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist"
+    touch "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist"
     _mock_uname_darwin
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
     run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; do_uninstall"
     [ "$status" -eq 0 ]
-    [ ! -f "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist" ]
+    [ ! -f "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist" ]
 }
 
-@test "do_uninstall: removes ~/.config/systemd/user/jira-assistant.service on Linux" {
+@test "do_uninstall: removes ~/.config/systemd/user/devmate.service on Linux" {
     mkdir -p "$FAKE_HOME/.config/systemd/user"
-    touch "$FAKE_HOME/.config/systemd/user/jira-assistant.service"
+    touch "$FAKE_HOME/.config/systemd/user/devmate.service"
     _mock_uname_linux
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/systemctl"
     chmod +x "$MOCK_BIN/systemctl"
     run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; do_uninstall"
     [ "$status" -eq 0 ]
-    [ ! -f "$FAKE_HOME/.config/systemd/user/jira-assistant.service" ]
+    [ ! -f "$FAKE_HOME/.config/systemd/user/devmate.service" ]
 }
 
-@test "do_uninstall: does NOT remove ~/.config/jira-assistant/" {
-    mkdir -p "$FAKE_HOME/.config/jira-assistant"
-    touch "$FAKE_HOME/.config/jira-assistant/config.json"
+@test "do_uninstall: does NOT remove ~/.config/devmate/" {
+    mkdir -p "$FAKE_HOME/.config/devmate"
+    touch "$FAKE_HOME/.config/devmate/config.json"
     _mock_uname_darwin
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
     chmod +x "$MOCK_BIN/launchctl"
     run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; do_uninstall"
     [ "$status" -eq 0 ]
-    [ -f "$FAKE_HOME/.config/jira-assistant/config.json" ]
+    [ -f "$FAKE_HOME/.config/devmate/config.json" ]
 }
 
 @test "do_uninstall: exits 0 gracefully when nothing is installed" {
@@ -582,7 +582,7 @@ _mock_uname_linux() {
 @test "do_uninstall: calls launchctl unload before removing plist" {
     local call_log="$FAKE_HOME/call_log"
     mkdir -p "$FAKE_HOME/Library/LaunchAgents"
-    touch "$FAKE_HOME/Library/LaunchAgents/com.jira-assistant.plist"
+    touch "$FAKE_HOME/Library/LaunchAgents/com.devmate.plist"
     _mock_uname_darwin
     {
         printf '#!/bin/sh\n'
@@ -600,11 +600,11 @@ _mock_uname_linux() {
     [ "$status" -eq 0 ]
     local unload_line rm_line
     unload_line=$(grep -n "launchctl unload" "$call_log" | head -1 | cut -d: -f1)
-    rm_line=$(grep -n "rm.*com.jira-assistant.plist" "$call_log" | head -1 | cut -d: -f1)
+    rm_line=$(grep -n "rm.*com.devmate.plist" "$call_log" | head -1 | cut -d: -f1)
     [ "$unload_line" -lt "$rm_line" ]
 }
 
-@test "do_uninstall: removes /usr/local/bin/jira-assistant" {
+@test "do_uninstall: removes /usr/local/bin/devmate" {
     local call_log="$FAKE_HOME/rm_calls"
     _mock_uname_darwin
     printf '#!/bin/sh\nexit 0\n' > "$MOCK_BIN/launchctl"
@@ -617,7 +617,7 @@ _mock_uname_linux() {
     chmod +x "$MOCK_BIN/rm"
     run bash -c "export HOME=\"$FAKE_HOME\"; export PATH=\"$MOCK_BIN:\$PATH\"; source \"$(_install_sh)\"; do_uninstall"
     [ "$status" -eq 0 ]
-    grep -q "/usr/local/bin/jira-assistant" "$call_log"
+    grep -q "/usr/local/bin/devmate" "$call_log"
 }
 
 @test "stop_existing_service: calls launchctl unload on macOS and ignores errors" {
