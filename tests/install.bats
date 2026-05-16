@@ -5,6 +5,11 @@
 
 setup() {
     BINARY_DIR="${BINARY_DIR:-./artifacts}"
+    CHECKSUMS_TMPDIR="$(mktemp -d)"
+}
+
+teardown() {
+    [ -n "$CHECKSUMS_TMPDIR" ] && rm -rf "$CHECKSUMS_TMPDIR"
 }
 
 verify_binary_size() {
@@ -78,4 +83,41 @@ verify_binary_size() {
     chmod +x "$bin"
     run "$bin" --version
     [ "$status" -eq 0 ]
+}
+
+_make_fixture_checksums() {
+    command -v sha256sum > /dev/null || skip "sha256sum not available"
+    local dir="$1"
+    printf 'data1' > "$dir/jira-assistant-macos-arm64"
+    printf 'data2' > "$dir/jira-assistant-macos-x64"
+    printf 'data3' > "$dir/jira-assistant-linux-x64"
+    (cd "$dir" && sha256sum * > checksums.txt)
+}
+
+@test "checksums.txt: each line matches <64 hex chars>  <filename> format" {
+    _make_fixture_checksums "$CHECKSUMS_TMPDIR"
+    [ "$(wc -l < "$CHECKSUMS_TMPDIR/checksums.txt")" -ge 3 ]
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[0-9a-f]{64}\ \ [^[:space:]]+$ ]]
+    done < "$CHECKSUMS_TMPDIR/checksums.txt"
+}
+
+@test "checksums.txt: all three binary names appear" {
+    _make_fixture_checksums "$CHECKSUMS_TMPDIR"
+    grep -q "jira-assistant-macos-arm64" "$CHECKSUMS_TMPDIR/checksums.txt"
+    grep -q "jira-assistant-macos-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
+    grep -q "jira-assistant-linux-x64"  "$CHECKSUMS_TMPDIR/checksums.txt"
+}
+
+@test "sha256sum --check exits 0 when binaries are intact" {
+    _make_fixture_checksums "$CHECKSUMS_TMPDIR"
+    run bash -c "cd \"$CHECKSUMS_TMPDIR\" && sha256sum --check checksums.txt"
+    [ "$status" -eq 0 ]
+}
+
+@test "sha256sum --check exits non-zero after binary corruption" {
+    _make_fixture_checksums "$CHECKSUMS_TMPDIR"
+    printf 'corrupted' > "$CHECKSUMS_TMPDIR/jira-assistant-macos-arm64"
+    run bash -c "cd \"$CHECKSUMS_TMPDIR\" && sha256sum --check checksums.txt"
+    [ "$status" -ne 0 ]
 }
