@@ -8,7 +8,7 @@ import { handleComment } from "./comment"
 import { handleHelp } from "./help"
 import { handleSolve } from "./solve"
 import { handleLogs } from "./logs"
-import { handleMyTickets } from "./my-tickets"
+import { handleMyTickets, handleMyTicketsPage } from "./my-tickets"
 
 export interface Clients {
   jira: JiraClient
@@ -27,6 +27,12 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
   commands.command("help", "Show available commands", ctx => handleHelp(ctx))
 
   bot.use(commands)
+
+  bot.callbackQuery(/^myt:p:(\d+)$/, async ctx => {
+    const page = parseInt((ctx.match as RegExpMatchArray)[1], 10)
+    await handleMyTicketsPage(ctx, clients, page)
+  })
+
   // setCommands syncs the UI menu — failure is non-fatal, bot routing still works
   try {
     await commands.setCommands(bot)

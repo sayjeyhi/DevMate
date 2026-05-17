@@ -16,6 +16,7 @@ import type { Clients } from "../../../src/bot/commands/index"
 function makeBot() {
   return {
     use: mock().mockReturnValue(undefined),
+    callbackQuery: mock().mockReturnValue(undefined),
     api: {
       setMyCommands: mock().mockResolvedValue(true),
       raw: {

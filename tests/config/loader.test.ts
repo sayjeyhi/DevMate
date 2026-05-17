@@ -24,7 +24,7 @@ log_level = "info"
 `
 
 const VALID_CONFIG: AppConfig = {
-  telegram: { bot_token: "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh" },
+  telegram: { bot_token: "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh", allowed_user_ids: [] },
   jira: {
     base_url: "https://mycompany.atlassian.net",
     api_token: "my-api-token",

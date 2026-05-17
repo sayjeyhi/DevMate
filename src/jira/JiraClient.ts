@@ -136,22 +136,32 @@ export class JiraClient {
     })
   }
 
-  async getMyIssues(limit = 10): Promise<JiraIssue[]> {
-    const response = await this.request<{
-      issues: Array<{ key: string; fields: { summary: string; status: { name: string } } }>
-    }>('POST', 'search/jql', {
+  async getMyIssues(
+    limit = 5,
+    nextPageToken?: string
+  ): Promise<{ issues: JiraIssue[]; nextPageToken?: string }> {
+    const body: Record<string, unknown> = {
       jql: 'assignee = currentUser() ORDER BY updated DESC',
       maxResults: limit,
       fields: ['summary', 'status'],
-    })
+    }
+    if (nextPageToken) body.nextPageToken = nextPageToken
 
-    return response.issues.map(issue => ({
-      key: issue.key,
-      summary: issue.fields.summary,
-      status: issue.fields.status.name,
-      description: '',
-      url: `https://${this.config.host}/browse/${issue.key}`,
-    }))
+    const response = await this.request<{
+      nextPageToken?: string
+      issues: Array<{ key: string; fields: { summary: string; status: { name: string } } }>
+    }>('POST', 'search/jql', body)
+
+    return {
+      nextPageToken: response.nextPageToken,
+      issues: response.issues.map(issue => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        status: issue.fields.status.name,
+        description: '',
+        url: `https://${this.config.host}/browse/${issue.key}`,
+      })),
+    }
   }
 
   async ping(): Promise<{ displayName: string; emailAddress: string }> {
