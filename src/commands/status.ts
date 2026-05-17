@@ -1,7 +1,7 @@
 import { homedir } from "os"
 import { defineCommand } from "citty"
 import { agentStatus } from "../daemon/launchd"
-import { readPid } from "../daemon/pid"
+import { readPid, isProcessRunning } from "../daemon/pid"
 import { loadConfig } from "../config/loader"
 import { PATHS } from "../shared/paths"
 
@@ -17,7 +17,11 @@ function fmtUptime(ms: number): string {
 }
 
 export async function statusCommand(): Promise<void> {
-  const [status, pid] = await Promise.all([agentStatus(), readPid()])
+  const [launchd, pid] = await Promise.all([agentStatus(), readPid()])
+
+  const devMode = !launchd.running && pid !== null && await isProcessRunning(pid)
+  const running = launchd.running || devMode
+  const activePid = launchd.pid ?? (devMode ? pid : null)
 
   let config = null
   try {
@@ -25,17 +29,18 @@ export async function statusCommand(): Promise<void> {
   } catch {}
 
   let uptime: string | undefined
-  if (status.running) {
+  if (running) {
     try {
       const stat = await Bun.file(PATHS.pidFile).stat()
       if (stat) uptime = fmtUptime(Date.now() - stat.mtimeMs)
     } catch {}
   }
 
+  const state = running ? (devMode ? "running (dev)" : "running") : "stopped"
   const lines: string[] = ["devmate status"]
-  lines.push(`  State:       ${status.running ? "running" : "stopped"}`)
-  if (status.running && pid !== null) lines.push(`  PID:         ${pid}`)
-  if (status.running && uptime) lines.push(`  Uptime:      ${uptime}`)
+  lines.push(`  State:       ${state}`)
+  if (running && activePid !== null) lines.push(`  PID:         ${activePid}`)
+  if (running && uptime) lines.push(`  Uptime:      ${uptime}`)
   lines.push(`  Config:      ${fmtPath(PATHS.configFile)}`)
   if (config) {
     lines.push(`  Jira URL:    ${config.jira.base_url}`)

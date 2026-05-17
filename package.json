@@ -2,9 +2,9 @@
   "name": "devmate",
   "version": "0.1.0",
   "scripts": {
-    "build": "bun run build.ts",
     "test": "bun test tests/",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "dev": "bun run src/index.ts stop 2>/dev/null; bun --watch --inspect run src/index.ts daemon"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",
