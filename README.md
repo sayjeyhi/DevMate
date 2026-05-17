@@ -19,7 +19,7 @@ bash install.sh
 Pin to a specific release (for reproducible installs):
 
 ```bash
-DEVMATE_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh | bash
+DEV_MATE_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/sayjeyhi/DevMate/main/install.sh | bash
 ```
 
 The installer:

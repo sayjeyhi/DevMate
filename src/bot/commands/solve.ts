@@ -27,19 +27,9 @@ Analyze the issue and respond with:
 
 Be concise and practical.`
 
-export async function handleSolve(ctx: Context, clients: Clients): Promise<void> {
-  const args = parseArgs(ctx)
-  const key = args[0]
-
-  if (!key) {
-    await ctx.reply("Usage: /solve <ticket-key>")
-    return
-  }
-
+export async function solveByKey(ctx: Context, clients: Clients, key: string): Promise<void> {
   await ctx.reply(`Analyzing ${key} with Claude...`)
-
   let typingInterval: ReturnType<typeof setInterval> | undefined
-
   try {
     await ctx.replyWithChatAction("typing")
     typingInterval = setInterval(() => {
@@ -48,10 +38,8 @@ export async function handleSolve(ctx: Context, clients: Clients): Promise<void>
 
     const issue = await clients.jira.getIssue(key)
 
-    // Replace {PLACEHOLDER} tokens with issue fields wrapped in XML delimiters.
-    // Description content is placed inside tags (not concatenated raw) to signal
-    // to Claude that it is data, not instructions — prompt injection defense.
-    // Null description coerced to empty string to avoid "null" in prompt.
+    // Description content is placed inside XML tags to signal it is data,
+    // not instructions — prompt injection defense.
     const prompt = SOLVE_PROMPT_TEMPLATE
       .replace("{KEY}", issue.key)
       .replace("{TITLE}", issue.summary)
@@ -59,26 +47,21 @@ export async function handleSolve(ctx: Context, clients: Clients): Promise<void>
       .replace("{DESCRIPTION}", issue.description ?? "")
 
     const response = await clients.claude.ask(prompt)
-
-    const chunks = splitMessage(response)
-    for (const chunk of chunks) {
+    for (const chunk of splitMessage(response)) {
       await ctx.reply(chunk)
     }
   } catch (err) {
-    if (err instanceof JiraNotFoundError) {
-      await ctx.reply(`Ticket ${key} not found.`)
-      return
-    }
-    if (err instanceof JiraAuthError) {
-      await ctx.reply("Jira authentication failed. Check your API token.")
-      return
-    }
-    if (err instanceof ClaudeTimeoutError) {
-      await ctx.reply("Claude timed out. Please try again.")
-      return
-    }
+    if (err instanceof JiraNotFoundError) { await ctx.reply(`Ticket ${key} not found.`); return }
+    if (err instanceof JiraAuthError) { await ctx.reply("Jira authentication failed. Check your API token."); return }
+    if (err instanceof ClaudeTimeoutError) { await ctx.reply("Claude timed out. Please try again."); return }
     if (err instanceof ClaudeExitError) {
-      await ctx.reply("Claude returned an error. Please try again.")
+      console.log({ event: "error", command: "solve", key, exitCode: err.exitCode, stderr: err.stderr.slice(0, 500) })
+      const isAuthError = /not logged in|please run \/login/i.test(err.stderr)
+      await ctx.reply(
+        isAuthError
+          ? "Claude is not authenticated. Run `claude login` in your terminal (not the app), then restart the bot. Alternatively set ANTHROPIC_API_KEY in your environment."
+          : "Claude returned an error. Please try again."
+      )
       return
     }
     const message = err instanceof Error ? err.message : String(err)
@@ -87,4 +70,14 @@ export async function handleSolve(ctx: Context, clients: Clients): Promise<void>
   } finally {
     if (typingInterval !== undefined) clearInterval(typingInterval)
   }
+}
+
+export async function handleSolve(ctx: Context, clients: Clients): Promise<void> {
+  const args = parseArgs(ctx)
+  const key = args[0]
+  if (!key) {
+    await ctx.reply("Usage: /solve <ticket-key>")
+    return
+  }
+  await solveByKey(ctx, clients, key)
 }

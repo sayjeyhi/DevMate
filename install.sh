@@ -43,8 +43,8 @@ build_binary_name() {
 }
 
 resolve_version() {
-  if [[ -n "${DEVMATE_VERSION:-}" ]]; then
-    VERSION="$DEVMATE_VERSION"
+  if [[ -n "${DEV_MATE_VERSION:-}" ]]; then
+    VERSION="$DEV_MATE_VERSION"
   else
     local url
     url=$(curl -fsSL -o /dev/null -w "%{url_effective}" \
@@ -266,7 +266,7 @@ main() {
       --uninstall) do_uninstall; exit 0 ;;
       --help)
         echo "Usage: install.sh [--uninstall] [--help]"
-        echo "  DEVMATE_VERSION=vX.Y.Z  install specific version"
+        echo "  DEV_MATE_VERSION=vX.Y.Z  install specific version"
         exit 0
         ;;
     esac

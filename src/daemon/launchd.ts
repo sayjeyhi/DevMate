@@ -19,8 +19,16 @@ function xmlEscape(s: string): string {
     .replace(/'/g, "&apos;")
 }
 
+const FORWARDED_ENV_KEYS = ["HOME", "PATH", "USER", "ANTHROPIC_API_KEY", "CLAUDE_CONFIG_DIR"]
+
 export function generatePlist(binaryPath: string): string {
   try { mkdirSync(dirname(PATHS.logFile), { recursive: true }) } catch {}
+
+  const envEntries = FORWARDED_ENV_KEYS
+    .filter(k => process.env[k])
+    .map(k => `        <key>${k}</key>\n        <string>${xmlEscape(process.env[k]!)}</string>`)
+    .join("\n")
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -32,6 +40,10 @@ export function generatePlist(binaryPath: string): string {
         <string>${xmlEscape(binaryPath)}</string>
         <string>daemon</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+${envEntries}
+    </dict>
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>

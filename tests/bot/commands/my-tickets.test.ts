@@ -1,10 +1,13 @@
 import { describe, it, expect, mock } from "bun:test"
 import {
   handleMyTickets,
+  handleMyTicketsStatus,
   handleMyTicketsPage,
+  handleTicketDetails,
   statusEmoji,
+  escapeHtml,
   formatTicketsPage,
-  buildPaginationKeyboard,
+  buildNavKeyboard,
   PAGE_SIZE,
 } from "../../../src/bot/commands/my-tickets"
 import { JiraAuthError } from "../../../src/shared/errors"
@@ -30,13 +33,31 @@ function makeCtx(chatId = 42) {
   }
 }
 
-function makeClients(result: unknown = { issues: [], nextPageToken: undefined }) {
+const MOCK_STATUSES = [
+  { id: "1", name: "To Do", category: "To Do" },
+  { id: "2", name: "In Progress", category: "In Progress" },
+  { id: "3", name: "Done", category: "Done" },
+]
+
+function makeClients(
+  listResult: unknown = { issues: [], nextPageToken: undefined },
+  issueResult: unknown = makeIssue(1),
+  statusesResult: unknown = MOCK_STATUSES,
+) {
   return {
     jira: {
+      getStatuses:
+        statusesResult instanceof Error
+          ? mock().mockRejectedValue(statusesResult)
+          : mock().mockResolvedValue(statusesResult),
       getMyIssues:
-        result instanceof Error
-          ? mock().mockRejectedValue(result)
-          : mock().mockResolvedValue(result),
+        listResult instanceof Error
+          ? mock().mockRejectedValue(listResult)
+          : mock().mockResolvedValue(listResult),
+      getIssue:
+        issueResult instanceof Error
+          ? mock().mockRejectedValue(issueResult)
+          : mock().mockResolvedValue(issueResult),
     },
   }
 }
@@ -55,12 +76,46 @@ describe("statusEmoji", () => {
   it("is case-insensitive", () => { expect(statusEmoji("IN PROGRESS")).toBe("🔵") })
 })
 
+describe("escapeHtml", () => {
+  it("escapes ampersand", () => { expect(escapeHtml("a & b")).toBe("a &amp; b") })
+  it("escapes less-than", () => { expect(escapeHtml("a < b")).toBe("a &lt; b") })
+  it("escapes greater-than", () => { expect(escapeHtml("a > b")).toBe("a &gt; b") })
+  it("passes plain text unchanged", () => { expect(escapeHtml("hello world")).toBe("hello world") })
+  it("escapes multiple entities in one string", () => {
+    expect(escapeHtml("<script>alert('xss')</script>")).toBe("&lt;script&gt;alert('xss')&lt;/script&gt;")
+  })
+})
+
 describe("formatTicketsPage", () => {
-  it("shows range without total when no next page", () => {
+  it("wraps key and summary in bold tag", () => {
+    const issues = [makeIssue(1)]
+    const text = formatTicketsPage(issues, 0, false)
+    expect(text).toContain("<b>ENG-1: Issue 1</b>")
+  })
+
+  it("includes Open in Jira link", () => {
+    const issues = [makeIssue(1)]
+    const text = formatTicketsPage(issues, 0, false)
+    expect(text).toContain('<a href="https://jira.example.com/browse/ENG-1">Open in Jira</a>')
+  })
+
+  it("includes Details deep link when botUsername provided", () => {
+    const issues = [makeIssue(1)]
+    const text = formatTicketsPage(issues, 0, false, "mybot")
+    expect(text).toContain('<a href="https://t.me/mybot?start=detail_ENG-1">Details</a>')
+  })
+
+  it("omits Details link when no botUsername", () => {
+    const issues = [makeIssue(1)]
+    const text = formatTicketsPage(issues, 0, false)
+    expect(text).not.toContain("Details")
+  })
+
+  it("shows range without + when no next page", () => {
     const issues = [makeIssue(1)]
     const text = formatTicketsPage(issues, 0, false)
     expect(text).toContain("1–1")
-    expect(text).not.toContain("of ")
+    expect(text).not.toContain("+")
   })
 
   it("appends + to range when more pages exist", () => {
@@ -78,34 +133,22 @@ describe("formatTicketsPage", () => {
   it("numbers items from correct offset", () => {
     const issues = [makeIssue(6), makeIssue(7)]
     const text = formatTicketsPage(issues, 1, false)
-    expect(text).toContain("6. [ENG-6]")
-    expect(text).toContain("7. [ENG-7]")
+    expect(text).toContain("6. <b>ENG-6")
+    expect(text).toContain("7. <b>ENG-7")
   })
 
-  it("shows emoji for each ticket status", () => {
+  it("shows status emoji for each ticket", () => {
     const issues = [makeIssue(1, "Done"), makeIssue(2, "In Progress")]
     const text = formatTicketsPage(issues, 0, false)
     expect(text).toContain("✅")
     expect(text).toContain("🔵")
   })
 
-  it("includes status text", () => {
-    const issues = [makeIssue(1, "In Progress")]
-    const text = formatTicketsPage(issues, 0, false)
-    expect(text).toContain("In Progress")
-  })
-
-  it("includes the Jira URL", () => {
-    const issues = [makeIssue(1)]
-    const text = formatTicketsPage(issues, 0, false)
-    expect(text).toContain("https://jira.example.com/browse/ENG-1")
-  })
-
-  it("includes the issue key and summary", () => {
-    const issues = [makeIssue(42)]
-    const text = formatTicketsPage(issues, 0, false)
-    expect(text).toContain("ENG-42")
-    expect(text).toContain("Issue 42")
+  it("escapes HTML in summary", () => {
+    const issue = { ...makeIssue(1), summary: "Fix <bug> & crash" }
+    const text = formatTicketsPage([issue], 0, false)
+    expect(text).toContain("Fix &lt;bug&gt; &amp; crash")
+    expect(text).not.toContain("<bug>")
   })
 
   it("separates tickets with blank lines", () => {
@@ -115,108 +158,74 @@ describe("formatTicketsPage", () => {
   })
 })
 
-describe("buildPaginationKeyboard", () => {
+describe("buildNavKeyboard", () => {
   it("returns undefined when no prev and no next", () => {
-    expect(buildPaginationKeyboard(0, false, false)).toBeUndefined()
+    expect(buildNavKeyboard(0, false, false)).toBeUndefined()
   })
 
-  it("returns keyboard when hasNext is true", () => {
-    expect(buildPaginationKeyboard(0, false, true)).toBeDefined()
-  })
-
-  it("returns keyboard when hasPrev is true", () => {
-    expect(buildPaginationKeyboard(1, true, false)).toBeDefined()
-  })
-
-  it("first page: Next only, no Prev", () => {
-    const kb = buildPaginationKeyboard(0, false, true)!
-    const buttons = kb.inline_keyboard.flat() as { text: string; callback_data: string }[]
+  it("returns keyboard with Next when hasNext", () => {
+    const kb = buildNavKeyboard(0, false, true)!
+    const buttons = kb.inline_keyboard[0]
     expect(buttons.some(b => b.text.includes("Next"))).toBe(true)
     expect(buttons.some(b => b.text.includes("Prev"))).toBe(false)
   })
 
-  it("last page: Prev only, no Next", () => {
-    const kb = buildPaginationKeyboard(2, true, false)!
-    const buttons = kb.inline_keyboard.flat() as { text: string; callback_data: string }[]
+  it("returns keyboard with Prev when hasPrev", () => {
+    const kb = buildNavKeyboard(1, true, false)!
+    const buttons = kb.inline_keyboard[0]
     expect(buttons.some(b => b.text.includes("Prev"))).toBe(true)
     expect(buttons.some(b => b.text.includes("Next"))).toBe(false)
   })
 
-  it("middle page: both Prev and Next", () => {
-    const kb = buildPaginationKeyboard(1, true, true)!
-    const buttons = kb.inline_keyboard.flat() as { text: string; callback_data: string }[]
+  it("middle page has both Prev and Next", () => {
+    const kb = buildNavKeyboard(1, true, true)!
+    const buttons = kb.inline_keyboard[0]
     expect(buttons.some(b => b.text.includes("Prev"))).toBe(true)
     expect(buttons.some(b => b.text.includes("Next"))).toBe(true)
   })
 
-  it("Prev callback data points to previous page", () => {
-    const kb = buildPaginationKeyboard(2, true, true)!
-    const prev = (kb.inline_keyboard.flat() as { text: string; callback_data: string }[]).find(b => b.text.includes("Prev"))!
+  it("Prev callback points to previous page", () => {
+    const kb = buildNavKeyboard(2, true, true)!
+    const prev = kb.inline_keyboard[0].find(b => b.text.includes("Prev"))!
     expect(prev.callback_data).toBe("myt:p:1")
   })
 
-  it("Next callback data points to next page", () => {
-    const kb = buildPaginationKeyboard(1, true, true)!
-    const next = (kb.inline_keyboard.flat() as { text: string; callback_data: string }[]).find(b => b.text.includes("Next"))!
+  it("Next callback points to next page", () => {
+    const kb = buildNavKeyboard(1, true, true)!
+    const next = kb.inline_keyboard[0].find(b => b.text.includes("Next"))!
     expect(next.callback_data).toBe("myt:p:2")
   })
 })
 
-describe("handleMyTickets", () => {
-  it("replies with no-tickets message when Jira returns empty list", async () => {
+describe("handleMyTickets (status picker)", () => {
+  it("fetches statuses and shows picker with All button", async () => {
     const ctx = makeCtx()
-    const clients = makeClients({ issues: [], nextPageToken: undefined })
+    const clients = makeClients()
 
     await handleMyTickets(ctx as never, clients as never)
 
-    const reply = ctx.reply.mock.calls[0][0] as string
-    expect(reply.toLowerCase()).toContain("no ticket")
+    expect(clients.jira.getStatuses).toHaveBeenCalled()
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { text: string; callback_data: string }[][] } }
+    const allButtons = opts?.reply_markup?.inline_keyboard?.flat() ?? []
+    expect(allButtons.some(b => b.callback_data === "myt:s:")).toBe(true)
+    expect(allButtons.some(b => b.callback_data === "myt:s:In Progress")).toBe(true)
   })
 
-  it("calls getMyIssues with PAGE_SIZE and no token", async () => {
+  it("status buttons carry status name in callback_data", async () => {
     const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+    const clients = makeClients()
 
     await handleMyTickets(ctx as never, clients as never)
 
-    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE)
-  })
-
-  it("sends reply containing ticket key and summary", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
-
-    await handleMyTickets(ctx as never, clients as never)
-
-    const reply = ctx.reply.mock.calls[0][0] as string
-    expect(reply).toContain("ENG-1")
-    expect(reply).toContain("Issue 1")
-  })
-
-  it("attaches pagination keyboard when nextPageToken present", async () => {
-    const ctx = makeCtx()
-    const issues = Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1))
-    const clients = makeClients({ issues, nextPageToken: "cursor-abc" })
-
-    await handleMyTickets(ctx as never, clients as never)
-
-    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: unknown }
-    expect(opts?.reply_markup).toBeDefined()
-  })
-
-  it("sends no keyboard when no nextPageToken", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
-
-    await handleMyTickets(ctx as never, clients as never)
-
-    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: unknown }
-    expect(opts?.reply_markup).toBeUndefined()
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { callback_data: string }[][] } }
+    const callbacks = opts?.reply_markup?.inline_keyboard?.flat().map(b => b.callback_data) ?? []
+    expect(callbacks).toContain("myt:s:To Do")
+    expect(callbacks).toContain("myt:s:Done")
   })
 
   it("JiraAuthError → replies with auth/token error message", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(new JiraAuthError())
+    const clients = makeClients(undefined, undefined, new JiraAuthError())
 
     await handleMyTickets(ctx as never, clients as never)
 
@@ -226,7 +235,7 @@ describe("handleMyTickets", () => {
 
   it("generic error → replies with something went wrong message", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(new Error("Network failure"))
+    const clients = makeClients(undefined, undefined, new Error("Network failure"))
 
     await handleMyTickets(ctx as never, clients as never)
 
@@ -235,9 +244,72 @@ describe("handleMyTickets", () => {
   })
 })
 
+describe("handleMyTicketsStatus", () => {
+  it("replies with no-tickets message when list is empty", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ issues: [], nextPageToken: undefined })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply.toLowerCase()).toContain("no ticket")
+  })
+
+  it("calls getMyIssues with PAGE_SIZE, no token, and selected status", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
+
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, "In Progress")
+  })
+
+  it("passes undefined status to getMyIssues when empty string (All)", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "")
+
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, undefined)
+  })
+
+  it("sends HTML-formatted reply with bold title", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("<b>ENG-1")
+    const opts = ctx.reply.mock.calls[0][1] as { parse_mode?: string }
+    expect(opts?.parse_mode).toBe("HTML")
+  })
+
+  it("shows status label in header when status selected", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("In Progress")
+  })
+
+  it("adds nav keyboard when nextPageToken present", async () => {
+    const ctx = makeCtx()
+    const issues = Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1))
+    const clients = makeClients({ issues, nextPageToken: "cursor-abc" })
+
+    await handleMyTicketsStatus(ctx as never, clients as never, "")
+
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: unknown[][] } }
+    expect(opts?.reply_markup?.inline_keyboard).toHaveLength(1)
+  })
+})
+
 describe("handleMyTicketsPage", () => {
   it("calls getMyIssues with PAGE_SIZE", async () => {
-    const ctx = makeCtx()
+    const ctx = makeCtx(1001)  // fresh chatId — no cached tokens
     const issues = [makeIssue(6)]
     const clients = makeClients({ issues, nextPageToken: undefined })
 
@@ -249,7 +321,10 @@ describe("handleMyTicketsPage", () => {
   it("uses cached token when available", async () => {
     const chatId = 99
     const ctx = makeCtx(chatId)
-    const setupClients = makeClients({ issues: Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1)), nextPageToken: "tok-page1" })
+    const setupClients = makeClients({
+      issues: Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1)),
+      nextPageToken: "tok-page1",
+    })
     await handleMyTickets(ctx as never, setupClients as never)
 
     const pageClients = makeClients({ issues: [makeIssue(6)], nextPageToken: undefined })
@@ -258,7 +333,7 @@ describe("handleMyTicketsPage", () => {
     expect(pageClients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, "tok-page1")
   })
 
-  it("calls editMessageText with formatted ticket list", async () => {
+  it("calls editMessageText with HTML-formatted ticket list", async () => {
     const ctx = makeCtx()
     const issues = [makeIssue(6)]
     const clients = makeClients({ issues, nextPageToken: undefined })
@@ -267,7 +342,9 @@ describe("handleMyTicketsPage", () => {
 
     expect(ctx.editMessageText).toHaveBeenCalled()
     const text = ctx.editMessageText.mock.calls[0][0] as string
-    expect(text).toContain("ENG-6")
+    expect(text).toContain("<b>ENG-6")
+    const opts = ctx.editMessageText.mock.calls[0][1] as { parse_mode?: string }
+    expect(opts?.parse_mode).toBe("HTML")
   })
 
   it("always calls answerCallbackQuery on success", async () => {
@@ -287,15 +364,81 @@ describe("handleMyTicketsPage", () => {
 
     expect(ctx.answerCallbackQuery).toHaveBeenCalled()
   })
+})
 
-  it("shows Next button when nextPageToken present", async () => {
+describe("handleTicketDetails", () => {
+  it("fetches issue by key and replies with HTML", async () => {
     const ctx = makeCtx()
-    const issues = Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 6))
-    const clients = makeClients({ issues, nextPageToken: "cursor-next" })
+    const issue = { ...makeIssue(1), description: "Some description" }
+    const clients = makeClients(undefined, issue)
 
-    await handleMyTicketsPage(ctx as never, clients as never, 1)
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
-    const opts = ctx.editMessageText.mock.calls[0][1] as { reply_markup?: unknown }
-    expect(opts?.reply_markup).toBeDefined()
+    expect(clients.jira.getIssue).toHaveBeenCalledWith("ENG-1")
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("<b>ENG-1: Issue 1</b>")
+    expect(reply).toContain("Some description")
+    const opts = ctx.reply.mock.calls[0][1] as { parse_mode?: string }
+    expect(opts?.parse_mode).toBe("HTML")
+  })
+
+  it("shows no-description fallback when description is empty", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients(undefined, makeIssue(1))
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("<i>No description</i>")
+  })
+
+  it("includes Jira link", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients(undefined, makeIssue(1))
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain(`href="https://jira.example.com/browse/ENG-1"`)
+  })
+
+  it("calls answerCallbackQuery when invoked as callback", async () => {
+    const ctx = { ...makeCtx(), callbackQuery: { id: "cq1" } }
+    const clients = makeClients(undefined, makeIssue(1))
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled()
+  })
+
+  it("skips answerCallbackQuery when invoked from command (no callbackQuery)", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients(undefined, makeIssue(1))
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    expect(ctx.answerCallbackQuery).not.toHaveBeenCalled()
+  })
+
+  it("replies with error message on failure", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients(undefined, new Error("Not found"))
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    const reply = (ctx.reply.mock.calls[0][0] as string).toLowerCase()
+    expect(reply).toContain("could not load")
+  })
+
+  it("escapes HTML in ticket description", async () => {
+    const ctx = makeCtx()
+    const issue = { ...makeIssue(1), description: "Fix <bug> & crash" }
+    const clients = makeClients(undefined, issue)
+
+    await handleTicketDetails(ctx as never, clients as never, "ENG-1")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("Fix &lt;bug&gt; &amp; crash")
+    expect(reply).not.toContain("<bug>")
   })
 })

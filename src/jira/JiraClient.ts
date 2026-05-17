@@ -130,21 +130,34 @@ export class JiraClient {
     })
   }
 
+  async getTransitions(issueKey: string): Promise<Array<{ id: string; name: string }>> {
+    const response = await this.request<{ transitions: Array<{ id: string; name: string }> }>(
+      'GET',
+      `issue/${encodeURIComponent(issueKey)}/transitions`
+    )
+    return response.transitions
+  }
+
   async addComment(issueKey: string, body: string): Promise<void> {
     await this.request('POST', `issue/${encodeURIComponent(issueKey)}/comment`, {
       body: toADF(body),
     })
   }
 
+  async getStatuses(): Promise<Array<{ id: string; name: string; category: string }>> {
+    const response = await this.request<Array<{ id: string; name: string; statusCategory: { name: string } }>>('GET', 'status')
+    return response.map(s => ({ id: s.id, name: s.name, category: s.statusCategory.name }))
+  }
+
   async getMyIssues(
     limit = 5,
-    nextPageToken?: string
+    nextPageToken?: string,
+    status?: string,
   ): Promise<{ issues: JiraIssue[]; nextPageToken?: string }> {
-    const body: Record<string, unknown> = {
-      jql: 'assignee = currentUser() ORDER BY updated DESC',
-      maxResults: limit,
-      fields: ['summary', 'status'],
-    }
+    const jql = status
+      ? `assignee = currentUser() AND status = "${status}" ORDER BY updated DESC`
+      : 'assignee = currentUser() ORDER BY updated DESC'
+    const body: Record<string, unknown> = { jql, maxResults: limit, fields: ['summary', 'status'] }
     if (nextPageToken) body.nextPageToken = nextPageToken
 
     const response = await this.request<{

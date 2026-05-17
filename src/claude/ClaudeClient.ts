@@ -35,8 +35,6 @@ export class ClaudeClient {
     const args = [
       this.config.binaryPath,
       '--print',
-      '--bare',
-      '--no-session-persistence',
       '--dangerously-skip-permissions',
       '--output-format',
       'json',
@@ -48,7 +46,7 @@ export class ClaudeClient {
     const clonedEnv: Record<string, string | undefined> = { ...process.env }
     delete clonedEnv.CLAUDECODE
 
-    this.logger.info({ event: 'claude_spawn', model: effectiveModel })
+    this.logger.info({ event: 'claude_spawn', binary: this.config.binaryPath, model: effectiveModel, home: clonedEnv.HOME })
 
     let timedOut = false
     const startMs = Date.now()
@@ -84,22 +82,42 @@ export class ClaudeClient {
     }
 
     const durationMs = Date.now() - startMs
-    this.logger.info({ event: 'claude_done', exitCode: proc.exitCode, durationMs })
+    const failed = !timedOut && proc.exitCode !== null && proc.exitCode !== 0
+
+    this.logger.info({
+      event: 'claude_done',
+      exitCode: proc.exitCode,
+      durationMs,
+      ...(failed && {
+        stderr: stderr.slice(0, 1000) || undefined,
+        stdout: stdout.slice(0, 500) || undefined,
+      }),
+    })
 
     if (timedOut) {
       throw new ClaudeTimeoutError(effectiveTimeoutMs)
     }
-    if (proc.exitCode !== null && proc.exitCode !== 0) {
-      throw new ClaudeExitError(proc.exitCode, stderr)
+
+    // Always parse JSON — on failure, extract the human-readable error from result field
+    let parsed: Record<string, unknown> | undefined
+    try {
+      parsed = JSON.parse(stdout) as Record<string, unknown>
+    } catch {
+      this.logger.info({ event: 'claude_parse_error', stdout: stdout.slice(0, 500) })
     }
 
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(stdout)
-    } catch {
+    if (failed || parsed?.is_error) {
+      const errorMessage =
+        (typeof parsed?.result === 'string' ? parsed.result : null) ??
+        (stderr.trim() || `Claude exited with code ${proc.exitCode}`)
+      this.logger.info({ event: 'claude_error', exitCode: proc.exitCode, message: errorMessage })
+      throw new ClaudeExitError(proc.exitCode ?? 1, errorMessage)
+    }
+
+    if (!parsed) {
       throw new Error(`ClaudeClient: malformed JSON output: ${stdout}`)
     }
-    const result = (parsed as Record<string, unknown>).result
+    const result = parsed.result
     if (typeof result !== 'string') {
       throw new Error(`ClaudeClient: unexpected result type in: ${stdout}`)
     }

@@ -8,7 +8,17 @@ import { handleComment } from "./comment"
 import { handleHelp } from "./help"
 import { handleSolve } from "./solve"
 import { handleLogs } from "./logs"
-import { handleMyTickets, handleMyTicketsPage } from "./my-tickets"
+import {
+  handleMyTickets,
+  handleMyTicketsStatus,
+  handleMyTicketsPage,
+  handleTicketDetails,
+  handleSolveTicket,
+  handleMoveStart,
+  handleMoveExecute,
+  handleCommentStart,
+  pendingComments,
+} from "./my-tickets"
 
 export interface Clients {
   jira: JiraClient
@@ -16,6 +26,24 @@ export interface Clients {
 }
 
 export async function registerCommands(bot: Bot, clients: Clients): Promise<void> {
+  // Intercept pending comment replies before command routing
+  bot.on("message:text", async (ctx, next) => {
+    const chatId = ctx.chat.id
+    const key = pendingComments.get(chatId)
+    if (key) {
+      pendingComments.delete(chatId)
+      try {
+        await ctx.replyWithChatAction("typing")
+        await clients.jira.addComment(key, ctx.message.text)
+        await ctx.reply(`✅ Comment added to ${key}`)
+      } catch {
+        await ctx.reply("Could not add comment. Please try again.")
+      }
+      return
+    }
+    return next()
+  })
+
   const commands = new CommandGroup<Context>()
 
   commands.command("create", "Create a new Jira ticket", ctx => handleCreate(ctx, clients))
@@ -28,9 +56,42 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
 
   bot.use(commands)
 
+  bot.command("start", async ctx => {
+    const payload = ctx.match
+    if (payload?.startsWith("detail_")) {
+      const key = payload.slice(7)
+      await handleTicketDetails(ctx, clients, key)
+    }
+  })
+
+  bot.callbackQuery(/^myt:s:(.*)$/, async ctx => {
+    const status = (ctx.match as RegExpMatchArray)[1]
+    await handleMyTicketsStatus(ctx, clients, status)
+  })
+
   bot.callbackQuery(/^myt:p:(\d+)$/, async ctx => {
     const page = parseInt((ctx.match as RegExpMatchArray)[1], 10)
     await handleMyTicketsPage(ctx, clients, page)
+  })
+
+  bot.callbackQuery(/^tkt:solve:([A-Z]+-\d+)$/, async ctx => {
+    const key = (ctx.match as RegExpMatchArray)[1]
+    await handleSolveTicket(ctx, clients, key)
+  })
+
+  bot.callbackQuery(/^tkt:move:([A-Z]+-\d+)$/, async ctx => {
+    const key = (ctx.match as RegExpMatchArray)[1]
+    await handleMoveStart(ctx, clients, key)
+  })
+
+  bot.callbackQuery(/^tkt:trn:([A-Z]+-\d+):(\d+)$/, async ctx => {
+    const [, key, idxStr] = ctx.match as RegExpMatchArray
+    await handleMoveExecute(ctx, clients, key, parseInt(idxStr, 10))
+  })
+
+  bot.callbackQuery(/^tkt:comment:([A-Z]+-\d+)$/, async ctx => {
+    const key = (ctx.match as RegExpMatchArray)[1]
+    await handleCommentStart(ctx, key)
   })
 
   // setCommands syncs the UI menu — failure is non-fatal, bot routing still works

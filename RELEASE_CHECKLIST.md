@@ -16,4 +16,4 @@ Run these manually before publishing each release.
 - [ ] **Checksum mismatch** — corrupt a downloaded binary byte; "Checksum mismatch" message and exit 1
 - [ ] **Non-TTY stdin** — `curl ... | bash`; config wizard deferred; advisory message printed
 - [ ] **Linux ARM64 rejection** — on ARM64 Linux, explicit error message and exit 1
-- [ ] **Version pinning** — `DEVMATE_VERSION=v1.0.0 bash install.sh`; exact version downloaded
+- [ ] **Version pinning** — `DEV_MATE_VERSION=v1.0.0 bash install.sh`; exact version downloaded
