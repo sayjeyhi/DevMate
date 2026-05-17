@@ -5,7 +5,7 @@
 04-distribution
 END_MANIFEST -->
 
-# Project Manifest — DevMate
+# Project Manifest — DevM8
 
 Bun-based CLI daemon. Talks to Telegram, Jira Cloud, and local Claude CLI. Installs via one-line bash on macOS.
 

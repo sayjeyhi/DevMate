@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="sayjeyhi/DevMate"
-CONFIG_FILE="${HOME}/.config/devmate/config.json"
+REPO="sayjeyhi/DevM8"
+CONFIG_FILE="${HOME}/.config/devm8/config.json"
 TMP_DIR=""
 
 detect_platform() {
@@ -39,7 +39,7 @@ detect_platform() {
 }
 
 build_binary_name() {
-  BINARY="devmate-${OS}-${ARCH}"
+  BINARY="devm8-${OS}-${ARCH}"
 }
 
 resolve_version() {
@@ -56,9 +56,9 @@ resolve_version() {
 
 stop_existing_service() {
   if [[ "$OS" == "macos" ]]; then
-    launchctl unload "${HOME}/Library/LaunchAgents/com.devmate.plist" 2>/dev/null || true
+    launchctl unload "${HOME}/Library/LaunchAgents/com.devm8.plist" 2>/dev/null || true
   else
-    systemctl --user stop devmate 2>/dev/null || true
+    systemctl --user stop devm8 2>/dev/null || true
   fi
 }
 
@@ -69,9 +69,9 @@ select_install_dir() {
     INSTALL_DIR="${HOME}/.local/bin"
     mkdir -p "$INSTALL_DIR"
   fi
-  if command -v devmate &>/dev/null; then
+  if command -v devm8 &>/dev/null; then
     local prev_dir
-    prev_dir=$(dirname "$(command -v devmate)")
+    prev_dir=$(dirname "$(command -v devm8)")
     if [[ "$prev_dir" != "$INSTALL_DIR" ]]; then
       echo "Warning: previous install found at $prev_dir — there may be a stale binary." >&2
     fi
@@ -80,7 +80,7 @@ select_install_dir() {
 
 ensure_path() {
   local dir="$1"
-  local marker="# devmate"
+  local marker="# devm8"
   local rc
   for rc in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"; do
     if [[ -f "$rc" ]] && ! grep -qF "$marker" "$rc"; then
@@ -140,16 +140,16 @@ run_config_if_needed() {
     return 0
   fi
   if [[ ! -t 0 ]]; then
-    echo "Run \`devmate config\` to complete setup."
+    echo "Run \`devm8 config\` to complete setup."
     return 0
   fi
-  devmate config
+  devm8 config
 }
 
 print_success() {
   echo ""
-  echo "devmate ${VERSION} installed successfully!"
-  echo "  Binary:  $INSTALL_DIR/devmate"
+  echo "devm8 ${VERSION} installed successfully!"
+  echo "  Binary:  $INSTALL_DIR/devm8"
   echo "  Service: ${SERVICE_STATUS:-registered}"
   if [[ "${PATH_MODIFIED:-false}" == "true" ]]; then
     echo "  PATH: $INSTALL_DIR added — restart your shell or run: source ~/.zshrc"
@@ -159,7 +159,7 @@ print_success() {
 register_macos_service() {
   local binary_path="$1"
   local plist_dir="$HOME/Library/LaunchAgents"
-  local plist_path="$plist_dir/com.devmate.plist"
+  local plist_path="$plist_dir/com.devm8.plist"
   mkdir -p "$plist_dir"
   mkdir -p "$HOME/Library/Logs"
   launchctl unload "$plist_path" 2>/dev/null || true
@@ -170,7 +170,7 @@ register_macos_service() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.devmate</string>
+    <string>com.devm8</string>
     <key>ProgramArguments</key>
     <array>
         <string>${binary_path}</string>
@@ -188,9 +188,9 @@ register_macos_service() {
     <key>ThrottleInterval</key>
     <integer>30</integer>
     <key>StandardOutPath</key>
-    <string>${HOME}/Library/Logs/devmate.log</string>
+    <string>${HOME}/Library/Logs/devm8.log</string>
     <key>StandardErrorPath</key>
-    <string>${HOME}/Library/Logs/devmate.log</string>
+    <string>${HOME}/Library/Logs/devm8.log</string>
 </dict>
 </plist>
 EOF
@@ -200,11 +200,11 @@ EOF
 register_linux_service() {
   local binary_path="$1"
   local unit_dir="$HOME/.config/systemd/user"
-  local unit_path="$unit_dir/devmate.service"
+  local unit_path="$unit_dir/devm8.service"
   mkdir -p "$unit_dir"
   cat > "$unit_path" <<EOF
 [Unit]
-Description=DevMate Telegram Bot
+Description=DevM8 Telegram Bot
 After=network.target
 
 [Service]
@@ -219,25 +219,25 @@ StartLimitBurst=5
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now devmate
+  systemctl --user enable --now devm8
   echo
-  echo "Optional: to start devmate at boot even when you are not logged in, run:"
+  echo "Optional: to start devm8 at boot even when you are not logged in, run:"
   echo "  loginctl enable-linger $(id -un)"
   echo "Note: this may require sudo on some systems."
 }
 
 start_service() {
   if [[ "$OS" == "macos" ]]; then
-    if launchctl list 2>/dev/null | grep -q "com.devmate"; then
+    if launchctl list 2>/dev/null | grep -q "com.devm8"; then
       echo "Service running (launchd)."
     else
-      echo "Service not detected in launchd — check ~/Library/LaunchAgents/com.devmate.plist"
+      echo "Service not detected in launchd — check ~/Library/LaunchAgents/com.devm8.plist"
     fi
   else
-    if systemctl --user is-active devmate &>/dev/null; then
+    if systemctl --user is-active devm8 &>/dev/null; then
       echo "Service running (systemd)."
     else
-      echo "Service not detected — check: systemctl --user status devmate"
+      echo "Service not detected — check: systemctl --user status devm8"
     fi
   fi
 }
@@ -246,14 +246,14 @@ do_uninstall() {
   detect_platform
   stop_existing_service
   if [[ "$OS" == "macos" ]]; then
-    rm -f "${HOME}/Library/LaunchAgents/com.devmate.plist"
+    rm -f "${HOME}/Library/LaunchAgents/com.devm8.plist"
   else
-    systemctl --user disable devmate 2>/dev/null || true
-    rm -f "${HOME}/.config/systemd/user/devmate.service"
+    systemctl --user disable devm8 2>/dev/null || true
+    rm -f "${HOME}/.config/systemd/user/devm8.service"
   fi
-  rm -f /usr/local/bin/devmate
-  rm -f "${HOME}/.local/bin/devmate"
-  echo "Config files at ~/.config/devmate/ were left in place. Remove manually if desired."
+  rm -f /usr/local/bin/devm8
+  rm -f "${HOME}/.local/bin/devm8"
+  echo "Config files at ~/.config/devm8/ were left in place. Remove manually if desired."
   echo "PATH entries added to shell RC files must be cleaned up manually."
   exit 0
 }
@@ -291,13 +291,13 @@ main() {
   download_with_retry "$RELEASE_URL/$BINARY" "$TMP_DIR/$BINARY"
   download_with_retry "$RELEASE_URL/checksums.txt" "$TMP_DIR/checksums.txt"
   verify_checksum "$TMP_DIR/$BINARY" "$TMP_DIR/checksums.txt"
-  install_binary "$TMP_DIR/$BINARY" "$INSTALL_DIR/devmate"
+  install_binary "$TMP_DIR/$BINARY" "$INSTALL_DIR/devm8"
 
   if [[ "$OS" == "macos" ]]; then
-    strip_quarantine "$INSTALL_DIR/devmate"
-    register_macos_service "$INSTALL_DIR/devmate"
+    strip_quarantine "$INSTALL_DIR/devm8"
+    register_macos_service "$INSTALL_DIR/devm8"
   else
-    register_linux_service "$INSTALL_DIR/devmate"
+    register_linux_service "$INSTALL_DIR/devm8"
   fi
 
   run_config_if_needed

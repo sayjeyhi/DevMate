@@ -176,7 +176,7 @@ Load: `launchctl load ~/Library/LaunchAgents/com.jira-assistant.plist`
 Written to `~/.config/systemd/user/jira-assistant.service` (no sudo needed).
 
 Unit properties:
-- `[Unit] Description`: `DevMate Telegram Bot`
+- `[Unit] Description`: `DevM8 Telegram Bot`
 - `[Unit] After`: `network.target`
 - `[Service] Type`: `simple`
 - `[Service] ExecStart`: `<binary_path> start`

@@ -15,11 +15,11 @@ jobs:
       matrix:
         include:
           - target: bun-darwin-arm64
-            outfile: devmate-macos-arm64
+            outfile: devm8-macos-arm64
           - target: bun-darwin-x64
-            outfile: devmate-macos-x64
+            outfile: devm8-macos-x64
           - target: bun-linux-x64
-            outfile: devmate-linux-x64
+            outfile: devm8-linux-x64
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2

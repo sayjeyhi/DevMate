@@ -1,6 +1,6 @@
 # Deep Project Interview Transcript
 
-## Project: DevMate (Bun CLI + Telegram Bot + Daemon)
+## Project: DevM8 (Bun CLI + Telegram Bot + Daemon)
 
 ---
 

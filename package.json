@@ -1,5 +1,5 @@
 {
-  "name": "devmate",
+  "name": "devm8",
   "version": "0.1.0",
   "scripts": {
     "test": "bun test tests/",

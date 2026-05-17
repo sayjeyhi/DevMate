@@ -2,6 +2,11 @@ import { describe, it, expect, mock, spyOn, beforeEach } from "bun:test"
 import { ClaudeClient } from "../../src/claude/ClaudeClient"
 import { ClaudeTimeoutError, ClaudeExitError } from "../../src/shared/errors"
 
+// Produce a valid stream-json result line
+function resultLine(result: string, isError = false): string {
+  return `{"type":"result","subtype":"success","result":${JSON.stringify(result)},"is_error":${isError}}\n`
+}
+
 const mockLogger = { info: mock(), error: mock() }
 
 const baseConfig = {
@@ -75,7 +80,7 @@ function stubBun(proc: ReturnType<typeof makeMockProc> | ReturnType<typeof makeH
 
 describe("subprocess invocation", () => {
   it("writes prompt to stdin and closes it; prompt not in argv", async () => {
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -90,7 +95,7 @@ describe("subprocess invocation", () => {
 
   it("deletes CLAUDECODE from env (not set to undefined)", async () => {
     process.env.CLAUDECODE = "1"
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -105,7 +110,7 @@ describe("subprocess invocation", () => {
   })
 
   it("includes required fixed flags in args", async () => {
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -116,12 +121,12 @@ describe("subprocess invocation", () => {
       expect(args).not.toContain("--bare")
       expect(args).not.toContain("--no-session-persistence")
       expect(args).toContain("--output-format")
-      expect(args).toContain("json")
+      expect(args).toContain("stream-json")
     } finally { restore() }
   })
 
   it("omits --model when no model configured", async () => {
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -133,7 +138,7 @@ describe("subprocess invocation", () => {
   })
 
   it("includes --model from ClaudeConfig.model", async () => {
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient({ ...baseConfig, model: "claude-3-opus" }, mockLogger)
@@ -146,7 +151,7 @@ describe("subprocess invocation", () => {
   })
 
   it("includes --model from AskOptions.model (overrides config)", async () => {
-    const proc = makeMockProc({ stdout: '{"result":"ok"}' })
+    const proc = makeMockProc({ stdout: resultLine("ok") })
     const { spawnSpy, restore } = stubBun(proc)
     try {
       const client = new ClaudeClient({ ...baseConfig, model: "claude-3-opus" }, mockLogger)
@@ -163,8 +168,8 @@ describe("subprocess invocation", () => {
 // ─── Happy path ───────────────────────────────────────────────────────────────
 
 describe("happy path", () => {
-  it("returns result string from JSON stdout", async () => {
-    const proc = makeMockProc({ exitCode: 0, stdout: '{"result":"some response"}' })
+  it("returns result string from stream-json result event", async () => {
+    const proc = makeMockProc({ exitCode: 0, stdout: resultLine("some response") })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -173,14 +178,39 @@ describe("happy path", () => {
     } finally { restore() }
   })
 
-  it("returns only the result field, not the whole parsed object", async () => {
-    const proc = makeMockProc({ exitCode: 0, stdout: '{"result":"hello","extra":"ignored"}' })
+  it("authoritative result comes from result event, not accumulated deltas", async () => {
+    const stream = [
+      '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}',
+      '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}',
+      resultLine("Hello world"),
+    ].join('\n')
+    const proc = makeMockProc({ exitCode: 0, stdout: stream })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
       const result = await client.ask("prompt")
-      expect(result).toBe("hello")
-      expect(typeof result).toBe("string")
+      expect(result).toBe("Hello world")
+    } finally { restore() }
+  })
+
+  it("calls onProgress with accumulated text lines", async () => {
+    // Use JSON-safe text (no raw newlines inside the JSON string value)
+    const stream = [
+      '{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello from claude"}}',
+      resultLine("hello from claude"),
+    ].join('\n')
+    const proc = makeMockProc({ exitCode: 0, stdout: stream })
+    const { restore } = stubBun(proc)
+    try {
+      const progressCalls: string[][] = []
+      const client = new ClaudeClient(baseConfig, mockLogger)
+      await client.ask("prompt", {
+        onProgress: async (lines) => { progressCalls.push(lines) },
+      })
+      // Final flush fires when stream ends and textLines is non-empty
+      expect(progressCalls.length).toBeGreaterThan(0)
+      const last = progressCalls[progressCalls.length - 1]
+      expect(last.some(l => l.includes("hello from claude"))).toBe(true)
     } finally { restore() }
   })
 })
@@ -200,25 +230,25 @@ describe("error paths", () => {
     } finally { restore() }
   })
 
-  it("exit 0 but invalid JSON stdout → throws Error containing raw stdout", async () => {
+  it("exit 0 but no result event in stdout → throws Error", async () => {
     const proc = makeMockProc({ exitCode: 0, stdout: "not valid json" })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
       const err = await client.ask("prompt").catch(e => e)
       expect(err).toBeInstanceOf(Error)
-      expect((err as Error).message).toContain("not valid json")
+      expect((err as Error).message).toContain("no result event")
     } finally { restore() }
   })
 
-  it("exit 0 but result is not a string → throws Error", async () => {
-    const proc = makeMockProc({ exitCode: 0, stdout: '{"result":null}' })
+  it("result event with non-string result → throws ClaudeExitError with type message", async () => {
+    const proc = makeMockProc({ exitCode: 0, stdout: '{"type":"result","is_error":false,"result":null}\n' })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
       const err = await client.ask("prompt").catch(e => e)
-      expect(err).toBeInstanceOf(Error)
-      expect((err as Error).message).toContain("unexpected result type")
+      expect(err).toBeInstanceOf(ClaudeExitError)
+      expect((err as ClaudeExitError).stderr).toContain("unexpected result type")
     } finally { restore() }
   })
 })
@@ -299,7 +329,7 @@ describe("timeout behavior", () => {
 
   it("clears timer on successful call (no timer leak)", async () => {
     const clearTimeoutSpy = spyOn(globalThis, "clearTimeout")
-    const proc = makeMockProc({ stdout: '{"result":"done"}' })
+    const proc = makeMockProc({ stdout: resultLine("done") })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)
@@ -316,7 +346,7 @@ describe("timeout behavior", () => {
 
 describe("stdout drain", () => {
   it("reads stdout and stderr concurrently via Promise.all (no deadlock)", async () => {
-    const proc = makeMockProc({ exitCode: 0, stdout: '{"result":"data"}', stderr: "some warning" })
+    const proc = makeMockProc({ exitCode: 0, stdout: resultLine("data"), stderr: "some warning" })
     const { restore } = stubBun(proc)
     try {
       const client = new ClaudeClient(baseConfig, mockLogger)

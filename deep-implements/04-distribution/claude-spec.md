@@ -119,7 +119,7 @@ Load with: `launchctl load ~/Library/LaunchAgents/com.jira-assistant.plist`
 File: `~/.config/systemd/user/jira-assistant.service`
 
 Key properties:
-- `[Unit] Description`: `DevMate Telegram Bot`
+- `[Unit] Description`: `DevM8 Telegram Bot`
 - `[Service] ExecStart`: path to binary + `start`
 - `[Service] Restart`: `on-failure`
 - `[Install] WantedBy`: `default.target`

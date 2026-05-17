@@ -5,8 +5,12 @@ import { JiraAuthError, JiraNotFoundError, ClaudeTimeoutError, ClaudeExitError }
 function makeCtx(match: string) {
   return {
     match,
-    reply: mock().mockResolvedValue({}),
+    chat: { id: 42 },
+    reply: mock().mockResolvedValue({ message_id: 1 }),
     replyWithChatAction: mock().mockResolvedValue({}),
+    api: {
+      editMessageText: mock().mockResolvedValue({}),
+    },
   }
 }
 

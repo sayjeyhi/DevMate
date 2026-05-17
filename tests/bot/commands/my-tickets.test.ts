@@ -1,6 +1,7 @@
 import { describe, it, expect, mock } from "bun:test"
 import {
   handleMyTickets,
+  handleMyTicketsProject,
   handleMyTicketsStatus,
   handleMyTicketsPage,
   handleTicketDetails,
@@ -39,13 +40,29 @@ const MOCK_STATUSES = [
   { id: "3", name: "Done", category: "Done" },
 ]
 
-function makeClients(
-  listResult: unknown = { issues: [], nextPageToken: undefined },
-  issueResult: unknown = makeIssue(1),
-  statusesResult: unknown = MOCK_STATUSES,
-) {
+const MOCK_PROJECTS = [
+  { key: "MP", name: "Main Project" },
+  { key: "BZ", name: "Blaze" },
+]
+
+function makeClients(opts: {
+  listResult?: unknown
+  issueResult?: unknown
+  statusesResult?: unknown
+  projectsResult?: unknown
+} = {}) {
+  const {
+    listResult = { issues: [], nextPageToken: undefined },
+    issueResult = makeIssue(1),
+    statusesResult = MOCK_STATUSES,
+    projectsResult = MOCK_PROJECTS,
+  } = opts
   return {
     jira: {
+      getProjects:
+        projectsResult instanceof Error
+          ? mock().mockRejectedValue(projectsResult)
+          : mock().mockResolvedValue(projectsResult),
       getStatuses:
         statusesResult instanceof Error
           ? mock().mockRejectedValue(statusesResult)
@@ -197,35 +214,35 @@ describe("buildNavKeyboard", () => {
   })
 })
 
-describe("handleMyTickets (status picker)", () => {
-  it("fetches statuses and shows picker with All button", async () => {
+describe("handleMyTickets (project picker)", () => {
+  it("fetches projects and shows picker buttons", async () => {
     const ctx = makeCtx()
     const clients = makeClients()
 
     await handleMyTickets(ctx as never, clients as never)
 
-    expect(clients.jira.getStatuses).toHaveBeenCalled()
-    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { text: string; callback_data: string }[][] } }
-    const allButtons = opts?.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some(b => b.callback_data === "myt:s:")).toBe(true)
-    expect(allButtons.some(b => b.callback_data === "myt:s:In Progress")).toBe(true)
-  })
-
-  it("status buttons carry status name in callback_data", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients()
-
-    await handleMyTickets(ctx as never, clients as never)
-
+    expect(clients.jira.getProjects).toHaveBeenCalled()
     const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { callback_data: string }[][] } }
     const callbacks = opts?.reply_markup?.inline_keyboard?.flat().map(b => b.callback_data) ?? []
-    expect(callbacks).toContain("myt:s:To Do")
-    expect(callbacks).toContain("myt:s:Done")
+    expect(callbacks).toContain("myt:proj:MP")
+    expect(callbacks).toContain("myt:proj:BZ")
+  })
+
+  it("project buttons include project key and name in text", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients()
+
+    await handleMyTickets(ctx as never, clients as never)
+
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { text: string }[][] } }
+    const texts = opts?.reply_markup?.inline_keyboard?.flat().map(b => b.text) ?? []
+    expect(texts.some(t => t.includes("MP"))).toBe(true)
+    expect(texts.some(t => t.includes("BZ"))).toBe(true)
   })
 
   it("JiraAuthError → replies with auth/token error message", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, undefined, new JiraAuthError())
+    const clients = makeClients({ projectsResult: new JiraAuthError() })
 
     await handleMyTickets(ctx as never, clients as never)
 
@@ -235,7 +252,7 @@ describe("handleMyTickets (status picker)", () => {
 
   it("generic error → replies with something went wrong message", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, undefined, new Error("Network failure"))
+    const clients = makeClients({ projectsResult: new Error("Network failure") })
 
     await handleMyTickets(ctx as never, clients as never)
 
@@ -244,10 +261,66 @@ describe("handleMyTickets (status picker)", () => {
   })
 })
 
+describe("handleMyTicketsProject", () => {
+  it("fetches statuses and shows status picker with All button", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients()
+
+    await handleMyTicketsProject(ctx as never, clients as never, "MP")
+
+    expect(clients.jira.getStatuses).toHaveBeenCalled()
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { callback_data: string }[][] } }
+    const callbacks = opts?.reply_markup?.inline_keyboard?.flat().map(b => b.callback_data) ?? []
+    expect(callbacks).toContain("myt:s:")
+    expect(callbacks).toContain("myt:s:In Progress")
+  })
+
+  it("status buttons carry status name in callback_data", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients()
+
+    await handleMyTicketsProject(ctx as never, clients as never, "MP")
+
+    const opts = ctx.reply.mock.calls[0][1] as { reply_markup?: { inline_keyboard: { callback_data: string }[][] } }
+    const callbacks = opts?.reply_markup?.inline_keyboard?.flat().map(b => b.callback_data) ?? []
+    expect(callbacks).toContain("myt:s:To Do")
+    expect(callbacks).toContain("myt:s:Done")
+  })
+
+  it("shows project key in reply header", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients()
+
+    await handleMyTicketsProject(ctx as never, clients as never, "BZ")
+
+    const reply = ctx.reply.mock.calls[0][0] as string
+    expect(reply).toContain("BZ")
+  })
+
+  it("answers callback query", async () => {
+    const ctx = { ...makeCtx(), callbackQuery: { id: "cq1" } }
+    const clients = makeClients()
+
+    await handleMyTicketsProject(ctx as never, clients as never, "MP")
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled()
+  })
+
+  it("JiraAuthError → replies with auth/token error message", async () => {
+    const ctx = makeCtx()
+    const clients = makeClients({ statusesResult: new JiraAuthError() })
+
+    await handleMyTicketsProject(ctx as never, clients as never, "MP")
+
+    const reply = (ctx.reply.mock.calls[0][0] as string).toLowerCase()
+    expect(reply).toMatch(/auth|token/)
+  })
+})
+
 describe("handleMyTicketsStatus", () => {
   it("replies with no-tickets message when list is empty", async () => {
     const ctx = makeCtx()
-    const clients = makeClients({ issues: [], nextPageToken: undefined })
+    const clients = makeClients({ listResult: { issues: [], nextPageToken: undefined } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
 
@@ -255,27 +328,39 @@ describe("handleMyTicketsStatus", () => {
     expect(reply.toLowerCase()).toContain("no ticket")
   })
 
-  it("calls getMyIssues with PAGE_SIZE, no token, and selected status", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+  it("calls getMyIssues with PAGE_SIZE, no token, status, and undefined projectKey when no project selected", async () => {
+    const ctx = makeCtx(200)
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
 
-    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, "In Progress")
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, "In Progress", undefined)
+  })
+
+  it("passes projectKey from projectCache when project was selected", async () => {
+    const chatId = 201
+    const ctx = makeCtx(chatId)
+    const setupClients = makeClients()
+    await handleMyTicketsProject(ctx as never, setupClients as never, "MP")
+
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
+    await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
+
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, "In Progress", "MP")
   })
 
   it("passes undefined status to getMyIssues when empty string (All)", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+    const ctx = makeCtx(202)
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "")
 
-    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, undefined)
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, undefined, undefined)
   })
 
   it("sends HTML-formatted reply with bold title", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+    const ctx = makeCtx(203)
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "")
 
@@ -286,8 +371,8 @@ describe("handleMyTicketsStatus", () => {
   })
 
   it("shows status label in header when status selected", async () => {
-    const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+    const ctx = makeCtx(204)
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "In Progress")
 
@@ -296,9 +381,9 @@ describe("handleMyTicketsStatus", () => {
   })
 
   it("adds nav keyboard when nextPageToken present", async () => {
-    const ctx = makeCtx()
+    const ctx = makeCtx(205)
     const issues = Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1))
-    const clients = makeClients({ issues, nextPageToken: "cursor-abc" })
+    const clients = makeClients({ listResult: { issues, nextPageToken: "cursor-abc" } })
 
     await handleMyTicketsStatus(ctx as never, clients as never, "")
 
@@ -309,34 +394,33 @@ describe("handleMyTicketsStatus", () => {
 
 describe("handleMyTicketsPage", () => {
   it("calls getMyIssues with PAGE_SIZE", async () => {
-    const ctx = makeCtx(1001)  // fresh chatId — no cached tokens
+    const ctx = makeCtx(1001)
     const issues = [makeIssue(6)]
-    const clients = makeClients({ issues, nextPageToken: undefined })
+    const clients = makeClients({ listResult: { issues, nextPageToken: undefined } })
 
     await handleMyTicketsPage(ctx as never, clients as never, 1)
 
-    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined)
+    expect(clients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, undefined, undefined, undefined)
   })
 
   it("uses cached token when available", async () => {
     const chatId = 99
     const ctx = makeCtx(chatId)
     const setupClients = makeClients({
-      issues: Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1)),
-      nextPageToken: "tok-page1",
+      listResult: { issues: Array.from({ length: PAGE_SIZE }, (_, i) => makeIssue(i + 1)), nextPageToken: "tok-page1" },
     })
-    await handleMyTickets(ctx as never, setupClients as never)
+    await handleMyTicketsStatus(ctx as never, setupClients as never, "")
 
-    const pageClients = makeClients({ issues: [makeIssue(6)], nextPageToken: undefined })
+    const pageClients = makeClients({ listResult: { issues: [makeIssue(6)], nextPageToken: undefined } })
     await handleMyTicketsPage(ctx as never, pageClients as never, 1)
 
-    expect(pageClients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, "tok-page1")
+    expect(pageClients.jira.getMyIssues).toHaveBeenCalledWith(PAGE_SIZE, "tok-page1", undefined, undefined)
   })
 
   it("calls editMessageText with HTML-formatted ticket list", async () => {
     const ctx = makeCtx()
     const issues = [makeIssue(6)]
-    const clients = makeClients({ issues, nextPageToken: undefined })
+    const clients = makeClients({ listResult: { issues, nextPageToken: undefined } })
 
     await handleMyTicketsPage(ctx as never, clients as never, 1)
 
@@ -349,7 +433,7 @@ describe("handleMyTicketsPage", () => {
 
   it("always calls answerCallbackQuery on success", async () => {
     const ctx = makeCtx()
-    const clients = makeClients({ issues: [makeIssue(1)], nextPageToken: undefined })
+    const clients = makeClients({ listResult: { issues: [makeIssue(1)], nextPageToken: undefined } })
 
     await handleMyTicketsPage(ctx as never, clients as never, 0)
 
@@ -358,7 +442,7 @@ describe("handleMyTicketsPage", () => {
 
   it("still calls answerCallbackQuery on error", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(new Error("Network failure"))
+    const clients = makeClients({ listResult: new Error("Network failure") })
 
     await handleMyTicketsPage(ctx as never, clients as never, 1)
 
@@ -370,7 +454,7 @@ describe("handleTicketDetails", () => {
   it("fetches issue by key and replies with HTML", async () => {
     const ctx = makeCtx()
     const issue = { ...makeIssue(1), description: "Some description" }
-    const clients = makeClients(undefined, issue)
+    const clients = makeClients({ issueResult: issue })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -384,7 +468,7 @@ describe("handleTicketDetails", () => {
 
   it("shows no-description fallback when description is empty", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, makeIssue(1))
+    const clients = makeClients({ issueResult: makeIssue(1) })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -394,7 +478,7 @@ describe("handleTicketDetails", () => {
 
   it("includes Jira link", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, makeIssue(1))
+    const clients = makeClients({ issueResult: makeIssue(1) })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -404,7 +488,7 @@ describe("handleTicketDetails", () => {
 
   it("calls answerCallbackQuery when invoked as callback", async () => {
     const ctx = { ...makeCtx(), callbackQuery: { id: "cq1" } }
-    const clients = makeClients(undefined, makeIssue(1))
+    const clients = makeClients({ issueResult: makeIssue(1) })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -413,7 +497,7 @@ describe("handleTicketDetails", () => {
 
   it("skips answerCallbackQuery when invoked from command (no callbackQuery)", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, makeIssue(1))
+    const clients = makeClients({ issueResult: makeIssue(1) })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -422,7 +506,7 @@ describe("handleTicketDetails", () => {
 
   it("replies with error message on failure", async () => {
     const ctx = makeCtx()
-    const clients = makeClients(undefined, new Error("Not found"))
+    const clients = makeClients({ issueResult: new Error("Not found") })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 
@@ -433,7 +517,7 @@ describe("handleTicketDetails", () => {
   it("escapes HTML in ticket description", async () => {
     const ctx = makeCtx()
     const issue = { ...makeIssue(1), description: "Fix <bug> & crash" }
-    const clients = makeClients(undefined, issue)
+    const clients = makeClients({ issueResult: issue })
 
     await handleTicketDetails(ctx as never, clients as never, "ENG-1")
 

@@ -41,14 +41,14 @@ describe("LaunchctlError", () => {
 })
 
 describe("launchctlHint", () => {
-  it("maps 'No such file or directory' to devmate start hint", () => {
+  it("maps 'No such file or directory' to devm8 start hint", () => {
     const hint = launchctlHint("error: No such file or directory")
-    expect(hint).toContain("devmate start")
+    expect(hint).toContain("devm8 start")
   })
 
-  it("maps 'Operation already in progress' to devmate status hint", () => {
+  it("maps 'Operation already in progress' to devm8 status hint", () => {
     const hint = launchctlHint("error: Operation already in progress")
-    expect(hint).toContain("devmate status")
+    expect(hint).toContain("devm8 status")
   })
 
   it("maps 'Permission denied' to file permissions hint", () => {

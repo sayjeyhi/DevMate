@@ -139,7 +139,7 @@ const config: TelegramConfig = {
 }
 
 const telegram = new TelegramClient(config, logger)
-await telegram.sendMessage('Hello from DevMate!')
+await telegram.sendMessage('Hello from DevM8!')
 ```
 
 ---
