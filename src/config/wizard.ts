@@ -1,4 +1,4 @@
-import { intro, outro, text, multiselect, note, isCancel } from "@clack/prompts"
+import { intro, outro, text, multiselect, spinner, isCancel } from "@clack/prompts"
 import type { AppConfig } from "./schema"
 import { FriendlyError } from "../shared/errors"
 import { JiraClient } from "../jira/JiraClient"
@@ -18,16 +18,24 @@ function cancel<T>(value: T): T {
 }
 
 async function checkGhCli(): Promise<void> {
+  const s = spinner()
+  s.start("Checking GitHub CLI (gh)...")
+
   if (!Bun.which("gh")) {
-    note("Install GitHub CLI for full GitHub integration: https://cli.github.com", "gh not found")
+    s.stop("gh not found — install from https://cli.github.com (optional)", 1)
     return
   }
+
   try {
     const proc = Bun.spawn(["gh", "auth", "status"], { stdout: "pipe", stderr: "pipe" })
     if (await proc.exited !== 0) {
-      note("Run `gh auth login` to authenticate GitHub CLI.", "gh not authenticated")
+      s.stop("gh found but not authenticated — run `gh auth login`", 1)
+    } else {
+      s.stop("gh authenticated", 0)
     }
-  } catch { /* ignore — gh check is advisory only */ }
+  } catch {
+    s.stop("gh check failed — skipping", 1)
+  }
 }
 
 async function tryFetchProjects(

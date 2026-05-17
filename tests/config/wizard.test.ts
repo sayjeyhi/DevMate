@@ -17,7 +17,7 @@ let _isCancelImpl: (v: unknown) => boolean = () => false
 mock.module("@clack/prompts", () => ({
   intro: () => {},
   outro: () => {},
-  note: () => {},
+  spinner: () => ({ start: () => {}, stop: () => {} }),
   isCancel: (v: unknown) => _isCancelImpl(v),
   text: (o: TextOpts) => _textImpl(o),
   multiselect: (o: MultiselectOpts) => _multiselectImpl(o),
