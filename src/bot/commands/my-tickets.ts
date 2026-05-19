@@ -88,11 +88,12 @@ export function buildDetailsActionKeyboard(key: string): InlineKeyboardMarkup {
 
 const CATEGORY_ORDER: Record<string, number> = { "To Do": 0, "In Progress": 1, "Done": 2 }
 
-export async function handleMyTickets(ctx: Context, { jira }: Clients): Promise<void> {
+export async function handleMyTickets(ctx: Context, clients: Clients): Promise<void> {
+  const { jira } = clients
   const configuredKeys = jira.projectKeys
 
   if (configuredKeys.length === 1) {
-    await handleMyTicketsProject(ctx, { jira }, configuredKeys[0])
+    await handleMyTicketsProject(ctx, clients, configuredKeys[0])
     return
   }
 

@@ -9,7 +9,7 @@ declare const __VERSION__: string
 export async function startPolling(signal: AbortSignal, logger?: Logger, config?: AppConfig): Promise<void> {
   if (!config) {
     logger?.warn("no config provided — bot not starting")
-    await new Promise<void>(resolve => signal.addEventListener("abort", resolve, { once: true }))
+    await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), { once: true }))
     return
   }
   await startBotFromConfig(config, signal, logger ?? {

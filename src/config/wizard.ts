@@ -18,24 +18,40 @@ function cancel<T>(value: T): T {
   return value
 }
 
+// Adapts (string) => string | undefined validators to clack's expected signature
+function toValidate(
+  fn: (v: string) => string | undefined,
+): (value: string | undefined) => string | Error | undefined {
+  return (v) => fn(v ?? "")
+}
+
 async function checkGhCli(): Promise<void> {
   const s = spinner()
   s.start("Checking GitHub CLI (gh)...")
 
   if (!Bun.which("gh")) {
-    s.stop("gh not found — install from https://cli.github.com (optional)", 1)
+    s.stop("gh not found — install from https://cli.github.com (optional)")
     return
   }
 
   try {
     const proc = Bun.spawn(["gh", "auth", "status"], { stdout: "pipe", stderr: "pipe" })
     if (await proc.exited !== 0) {
-      s.stop("gh found but not authenticated — run `gh auth login`", 1)
+      s.stop("gh found but not authenticated — run `gh auth login`")
     } else {
-      s.stop("gh authenticated", 0)
+      s.stop("gh authenticated")
     }
   } catch {
-    s.stop("gh check failed — skipping", 1)
+    s.stop("gh check failed — skipping")
+  }
+}
+
+async function checkIsGitRepo(path: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "-C", path, "rev-parse", "--git-dir"], { stdout: "pipe", stderr: "pipe" })
+    return await proc.exited === 0
+  } catch {
+    return false
   }
 }
 
@@ -73,31 +89,31 @@ export async function runWizard(
   const bot_token = cancel(await text({
     message: "Telegram bot token",
     initialValue: existing?.telegram.bot_token,
-    validate: validateBotToken,
+    validate: toValidate(validateBotToken),
   }))
 
   const allowed_user_ids = cancel(await text({
     message: "Your Telegram user ID(s), comma-separated (send /start to @userinfobot to get yours)",
     initialValue: existing?.telegram.allowed_user_ids?.join(", ") ?? "",
-    validate: validateAllowedUserIds,
+    validate: toValidate(validateAllowedUserIds),
   }))
 
   const base_url = cancel(await text({
     message: "Jira base URL (e.g. https://mycompany.atlassian.net)",
     initialValue: existing?.jira.base_url,
-    validate: validateJiraBaseUrl,
+    validate: toValidate(validateJiraBaseUrl),
   }))
 
   const api_token = cancel(await text({
     message: "Jira API token",
     initialValue: existing?.jira.api_token,
-    validate: validateApiToken,
+    validate: toValidate(validateApiToken),
   }))
 
   const email = cancel(await text({
     message: "Jira account email",
     initialValue: existing?.jira.email,
-    validate: validateEmail,
+    validate: toValidate(validateEmail),
   }))
 
   let project_keys: string[]
@@ -115,7 +131,7 @@ export async function runWizard(
     const raw = cancel(await text({
       message: "Jira project keys, comma-separated (e.g. MP,BZ)",
       initialValue: existing?.jira.project_keys?.join(", ") ?? "",
-      validate: validateProjectKeys,
+      validate: toValidate(validateProjectKeys),
     }))
     project_keys = (raw as string).split(",").map(s => s.trim().toUpperCase()).filter(Boolean)
   }
@@ -123,7 +139,7 @@ export async function runWizard(
   const binary_path = cancel(await text({
     message: "Path to claude binary",
     initialValue: existing?.claude.binary_path ?? (Bun.which("claude") ?? ""),
-    validate: validateBinaryPath,
+    validate: toValidate(validateBinaryPath),
   }))
 
   const api_key = cancel(await text({
@@ -134,8 +150,17 @@ export async function runWizard(
   const repo_path = cancel(await text({
     message: "Local git repository path for ticket implementation (leave blank to skip)",
     initialValue: existing?.repo?.path ?? "",
-    validate: validateRepoPath,
+    validate: toValidate(validateRepoPath),
   }))
+
+  const repoPathTrimmed = (repo_path as string).trim()
+
+  if (repoPathTrimmed) {
+    const s = spinner()
+    s.start("Verifying git repository...")
+    const isRepo = await checkIsGitRepo(repoPathTrimmed)
+    s.stop(isRepo ? "Git repository confirmed" : "Warning: path exists but may not be a git repo")
+  }
 
   outro("Setup complete!")
 
@@ -143,8 +168,6 @@ export async function runWizard(
     .split(",")
     .map(s => parseInt(s.trim(), 10))
     .filter(n => !isNaN(n) && n > 0)
-
-  const repoPathTrimmed = (repo_path as string).trim()
 
   return {
     telegram: { bot_token: bot_token as string, allowed_user_ids: allowedUserIds },

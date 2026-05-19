@@ -44,7 +44,7 @@ export async function statusCommand(): Promise<void> {
   lines.push(`  Config:      ${fmtPath(PATHS.configFile)}`)
   if (config) {
     lines.push(`  Jira URL:    ${config.jira.base_url}`)
-    lines.push(`  Project:     ${config.jira.project_key}`)
+    lines.push(`  Projects:    ${config.jira.project_keys.join(", ")}`)
   }
   lines.push(`  Log:         ${fmtPath(PATHS.logFile)}`)
 

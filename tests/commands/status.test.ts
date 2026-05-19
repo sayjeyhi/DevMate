@@ -4,7 +4,7 @@ const agentStatusMock = mock(() => Promise.resolve({ running: true, pid: 12345 }
 const readPidMock = mock(() => Promise.resolve(12345))
 const loadConfigMock = mock(() => Promise.resolve({
   telegram: { bot_token: "123:abc" },
-  jira: { base_url: "https://myorg.atlassian.net", api_token: "token", email: "e@e.com", project_key: "ENG" },
+  jira: { base_url: "https://myorg.atlassian.net", api_token: "token", email: "e@e.com", project_keys: ["ENG"] },
   claude: { binary_path: "/usr/bin/claude" },
   app: { log_level: "info" as const },
 }))
@@ -51,8 +51,8 @@ describe("statusCommand()", () => {
   })
 
   it("output contains 'stopped' when daemon is not running", async () => {
-    agentStatusMock.mockImplementation(() => Promise.resolve({ running: false }))
-    readPidMock.mockImplementation(() => Promise.resolve(null))
+    agentStatusMock.mockImplementation(() => Promise.resolve({ running: false, pid: undefined } as any))
+    readPidMock.mockImplementation(() => Promise.resolve(null as any))
 
     const chunks: string[] = []
     const stdoutSpy = spyOn(process.stdout, "write").mockImplementation((chunk: any) => {
@@ -69,8 +69,8 @@ describe("statusCommand()", () => {
   })
 
   it("skips config section but still shows launchd state when no config file exists", async () => {
-    agentStatusMock.mockImplementation(() => Promise.resolve({ running: false }))
-    readPidMock.mockImplementation(() => Promise.resolve(null))
+    agentStatusMock.mockImplementation(() => Promise.resolve({ running: false, pid: undefined } as any))
+    readPidMock.mockImplementation(() => Promise.resolve(null as any))
     loadConfigMock.mockImplementation(() => Promise.reject(new Error("ENOENT")))
 
     const chunks: string[] = []
@@ -87,7 +87,7 @@ describe("statusCommand()", () => {
 
     loadConfigMock.mockImplementation(() => Promise.resolve({
       telegram: { bot_token: "123:abc" },
-      jira: { base_url: "https://myorg.atlassian.net", api_token: "token", email: "e@e.com", project_key: "ENG" },
+      jira: { base_url: "https://myorg.atlassian.net", api_token: "token", email: "e@e.com", project_keys: ["ENG"] },
       claude: { binary_path: "/usr/bin/claude" },
       app: { log_level: "info" as const },
     }))
