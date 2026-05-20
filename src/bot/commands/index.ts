@@ -21,7 +21,7 @@ import {
   handleCommentStart,
   pendingComments,
 } from "./my-tickets"
-import { handleAsk, handleAskRepoChoice, pendingAsk, askQuestion } from "./ask"
+import { handleAsk, handleAskRepoChoice, handleAskTextInput, handleAskSessionCallback, pendingAsk } from "./ask"
 
 export interface Clients {
   jira: JiraClient
@@ -37,7 +37,7 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
     const askPending = pendingAsk.get(chatId)
     if (askPending && !askPending.inlineQuestion) {
       pendingAsk.delete(chatId)
-      await askQuestion(ctx, clients, ctx.message.text, askPending.repoPath)
+      await handleAskTextInput(ctx, clients, ctx.message.text, askPending)
       return
     }
 
@@ -116,6 +116,11 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
   bot.callbackQuery(/^ask:repo:(\d+)$/, async ctx => {
     const idx = parseInt((ctx.match as RegExpMatchArray)[1], 10)
     await handleAskRepoChoice(ctx, clients, idx)
+  })
+
+  bot.callbackQuery(/^ask:(followup|branch|push|end|commit|openpr)$/, async ctx => {
+    const action = (ctx.match as RegExpMatchArray)[1]
+    await handleAskSessionCallback(ctx, clients, action)
   })
 
   bot.callbackQuery(/^tkt:repo:([A-Z]+-\d+):(\d+)$/, async ctx => {

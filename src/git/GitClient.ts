@@ -44,4 +44,34 @@ export class GitClient {
     const { exitCode } = await this.exec(['git', 'rev-parse', '--git-dir'])
     return exitCode === 0
   }
+
+  async stageAll(): Promise<void> {
+    const { exitCode, stderr } = await this.exec(['git', 'add', '.'])
+    if (exitCode !== 0) throw new Error(stderr || 'git add failed')
+  }
+
+  async commit(message: string): Promise<void> {
+    const { exitCode, stderr } = await this.exec(['git', 'commit', '-m', message])
+    if (exitCode !== 0) throw new Error(stderr || 'git commit failed')
+  }
+
+  async push(remote = 'origin'): Promise<void> {
+    const branch = await this.currentBranch()
+    const { exitCode, stderr } = await this.exec(['git', 'push', '--set-upstream', remote, branch])
+    if (exitCode !== 0) throw new Error(stderr || 'git push failed')
+  }
+
+  async createPr(): Promise<string> {
+    const create = await this.exec(['gh', 'pr', 'create', '--fill'])
+    if (create.exitCode === 0) {
+      const url = create.stdout.trim().split('\n').at(-1)?.trim() ?? ''
+      if (url.startsWith('https://')) return url
+    }
+    // PR may already exist — fetch its URL
+    const view = await this.exec(['gh', 'pr', 'view', '--json', 'url', '--jq', '.url'])
+    if (view.exitCode === 0 && view.stdout.trim().startsWith('https://')) {
+      return view.stdout.trim()
+    }
+    throw new Error(create.stderr || 'gh pr create failed')
+  }
 }
