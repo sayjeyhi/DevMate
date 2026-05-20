@@ -45,6 +45,11 @@ export class GitClient {
     return exitCode === 0
   }
 
+  async getDiffStat(): Promise<string> {
+    const { stdout } = await this.exec(['git', 'diff', 'HEAD', '--stat'])
+    return stdout.trim()
+  }
+
   async stageAll(): Promise<void> {
     const { exitCode, stderr } = await this.exec(['git', 'add', '.'])
     if (exitCode !== 0) throw new Error(stderr || 'git add failed')
@@ -53,6 +58,13 @@ export class GitClient {
   async commit(message: string): Promise<void> {
     const { exitCode, stderr } = await this.exec(['git', 'commit', '-m', message])
     if (exitCode !== 0) throw new Error(stderr || 'git commit failed')
+  }
+
+  async pull(remote = 'origin'): Promise<string> {
+    const branch = await this.currentBranch()
+    const { exitCode, stdout, stderr } = await this.exec(['git', 'pull', remote, branch])
+    if (exitCode !== 0) throw new Error(stderr || 'git pull failed')
+    return stdout
   }
 
   async push(remote = 'origin'): Promise<void> {

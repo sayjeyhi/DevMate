@@ -69,6 +69,10 @@ async function showRepoPicker(ctx: Context, repos: RepoEntry[]): Promise<void> {
   if (ctx.callbackQuery) await ctx.answerCallbackQuery()
 }
 
+function repoReadyKeyboard(): { inline_keyboard: SessionButton[][] } {
+  return { inline_keyboard: [[{ text: "🔄 Pull origin", callback_data: "ask:pull" }]] }
+}
+
 function sessionKeyboard(withPr = false): { inline_keyboard: SessionButton[][] } {
   const rows: SessionButton[][] = [
     [
@@ -289,15 +293,37 @@ export async function handleAskSessionCallback(
     try {
       const clean = await git.isClean()
       if (clean) {
-        await ctx.reply("Nothing to commit — working tree is clean.", {
-          reply_markup: sessionKeyboard(),
-        })
+        await ctx.reply("Nothing to commit — working tree is clean.", { reply_markup: sessionKeyboard() })
         return
       }
     } catch { /* continue */ }
+
     pendingAsk.set(chatId, { repoPath: session?.repoPath, mode: "commit" })
+    const thinkingMsg = await ctx.reply("🤔 Generating commit message suggestion…")
+
+    let suggestion = ""
+    try {
+      const diff = await git.getDiffStat()
+      if (diff) {
+        suggestion = await clients.claude.ask(
+          `Generate a concise git commit message (max 72 chars, imperative mood) for these changes:\n\n${diff}\n\nOutput ONLY the commit message, no explanation.`,
+          { timeoutMs: 30_000 },
+        )
+        suggestion = suggestion.trim().replace(/^["']|["']$/g, "")
+      }
+    } catch { /* non-fatal — fall through to manual entry */ }
+
+    await ctx.api.deleteMessage(chatId, thinkingMsg.message_id).catch(() => {})
+
     const gitInfo = await gitStatusLines(git)
-    await ctx.reply(`📝 Enter commit message:${gitInfo}`, { parse_mode: "HTML" })
+    if (suggestion) {
+      await ctx.reply(
+        `📝 Suggested commit message:\n\n<code>${escapeHtml(suggestion)}</code>${gitInfo}\n\nSend it as-is or type your own:`,
+        { parse_mode: "HTML" },
+      )
+    } else {
+      await ctx.reply(`📝 Enter commit message:${gitInfo}`, { parse_mode: "HTML" })
+    }
     return
   }
 
@@ -323,6 +349,24 @@ export async function handleAskSessionCallback(
       })
     } catch (err) {
       await ctx.reply(`❌ Push failed: ${escapeHtml((err as Error).message)}`, { parse_mode: "HTML" })
+    }
+    return
+  }
+
+  if (action === "pull") {
+    await ctx.answerCallbackQuery()
+    const git = session?.git
+    if (!git) { await ctx.reply("No repo in this session."); return }
+    try {
+      await ctx.replyWithChatAction("typing")
+      const output = await git.pull()
+      const gitInfo = await gitStatusLines(git)
+      const summary = output.includes("Already up to date") ? "Already up to date." : escapeHtml(output.split("\n").at(-1) ?? output)
+      await ctx.reply(`✅ Pulled: <code>${summary}</code>${gitInfo}\n\nType your question:`, {
+        parse_mode: "HTML",
+      })
+    } catch (err) {
+      await ctx.reply(`❌ Pull failed: ${escapeHtml((err as Error).message)}`, { parse_mode: "HTML" })
     }
     return
   }
@@ -365,8 +409,8 @@ export async function handleAsk(ctx: Context, clients: Clients): Promise<void> {
       askSessions.set(chatId, { repoPath, git, history: [] })
       const gitInfo = await gitStatusLines(git)
       await ctx.reply(
-        `📂 Using <code>${escapeHtml(repoLabel(repos[0]))}</code>${gitInfo}\n\nType your question:`,
-        { parse_mode: "HTML" },
+        `📂 Using <code>${escapeHtml(repoLabel(repos[0]))}</code>${gitInfo}\n\nPull latest or type your question:`,
+        { parse_mode: "HTML", reply_markup: repoReadyKeyboard() },
       )
     }
     return
@@ -403,7 +447,7 @@ export async function handleAskRepoChoice(
   pendingAsk.set(chatId, { repoPath })
   const gitInfo = await gitStatusLines(git)
   await ctx.reply(
-    `📂 <code>${escapeHtml(repoLabel(entry))}</code> selected.${gitInfo}\n\nType your question:`,
-    { parse_mode: "HTML" },
+    `📂 <code>${escapeHtml(repoLabel(entry))}</code> selected.${gitInfo}\n\nPull latest or type your question:`,
+    { parse_mode: "HTML", reply_markup: repoReadyKeyboard() },
   )
 }

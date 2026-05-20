@@ -2,14 +2,17 @@ import { PATHS } from "../shared/paths"
 
 interface SlackState {
   lastTs: Record<string, string>
+  // channelId → threadTs → lastReplyTs
+  threadTs: Record<string, Record<string, string>>
 }
 
 export async function loadSlackState(): Promise<SlackState> {
   try {
     const text = await Bun.file(PATHS.slackStateFile).text()
-    return JSON.parse(text) as SlackState
+    const parsed = JSON.parse(text) as Partial<SlackState>
+    return { lastTs: parsed.lastTs ?? {}, threadTs: parsed.threadTs ?? {} }
   } catch {
-    return { lastTs: {} }
+    return { lastTs: {}, threadTs: {} }
   }
 }
 

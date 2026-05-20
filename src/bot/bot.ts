@@ -67,6 +67,7 @@ export async function startBotFromConfig(
   if (config.slack) {
     const slackClient = new SlackClient(config.slack.user_token)
     const poller = new SlackPoller(slackClient, config.slack.poll_interval_ms)
+    poller.setErrorHandler(err => logger.error("slack poll error", { message: err.message }))
 
     // Register text interceptor before commands so it gets first pick on pending replies
     registerSlackHandlers(bot, slackClient, claude)
@@ -75,6 +76,7 @@ export async function startBotFromConfig(
       createSlackForwardHandler(
         config.telegram.allowed_user_ids,
         (chatId, text, options) => bot.api.sendMessage(chatId, text, options as Parameters<typeof bot.api.sendMessage>[2]),
+        (chatId, err) => logger.error("slack forward failed", { chatId, message: err.message }),
       ),
     )
 

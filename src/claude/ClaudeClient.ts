@@ -47,7 +47,7 @@ export class ClaudeClient {
   ) {}
 
   async ask(prompt: string, options?: AskOptions): Promise<string> {
-    const effectiveTimeoutMs = options?.timeoutMs ?? this.config.timeoutMs ?? 120000
+    const effectiveTimeoutMs = options?.timeoutMs ?? this.config.timeoutMs ?? 20 * 60 * 1000
     const effectiveModel = options?.model ?? this.config.model
 
     const args = [

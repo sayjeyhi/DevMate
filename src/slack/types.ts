@@ -7,6 +7,7 @@ export interface SlackMessage {
   ts: string
   thread_ts?: string
   subtype?: string
+  reply_count?: number
 }
 
 export interface SlackChannel {

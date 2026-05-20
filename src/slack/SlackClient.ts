@@ -2,6 +2,16 @@ import type { SlackAuthTestResult, SlackChannel, SlackMessage, SlackUser } from 
 
 const BASE = "https://slack.com/api"
 
+export class SlackRateLimitError extends Error {
+  constructor(
+    public readonly method: string,
+    public readonly retryAfterSeconds: number,
+  ) {
+    super(`Slack rate limited on ${method}, retry after ${retryAfterSeconds}s`)
+    this.name = "SlackRateLimitError"
+  }
+}
+
 export class SlackClient {
   constructor(private readonly token: string) {}
 
@@ -11,6 +21,10 @@ export class SlackClient {
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${this.token}` },
     })
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("Retry-After") ?? "30", 10)
+      throw new SlackRateLimitError(method, retryAfter)
+    }
     if (!res.ok) throw new Error(`Slack HTTP ${res.status} on ${method}`)
     const data = await res.json() as { ok: boolean; error?: string } & T
     if (!data.ok) throw new Error(`Slack API error on ${method}: ${data.error}`)
@@ -73,6 +87,23 @@ export class SlackClient {
     type Resp = { user: SlackUser }
     const data = await this.get<Resp>("users.info", { user: userId })
     return data.user
+  }
+
+  async getReplies(channelId: string, threadTs: string, oldest?: string): Promise<SlackMessage[]> {
+    type Resp = { messages: SlackMessage[] }
+    const params: Record<string, string> = { channel: channelId, ts: threadTs, limit: "50" }
+    if (oldest) params.oldest = oldest
+    const data = await this.get<Resp>("conversations.replies", params)
+    // first message is the thread root — skip it, return only replies
+    return data.messages.slice(1).filter(m => !m.subtype && !m.bot_id && !m.app_id)
+  }
+
+  async addReaction(channelId: string, ts: string, emoji: string): Promise<void> {
+    try {
+      await this.post("reactions.add", { channel: channelId, timestamp: ts, name: emoji })
+    } catch {
+      // already reacted or missing scope — non-fatal
+    }
   }
 
   async postMessage(channelId: string, text: string, threadTs?: string): Promise<void> {

@@ -36,6 +36,7 @@ function slackKeyboard(channelId: string, ts: string): { inline_keyboard: Callba
 export function createSlackForwardHandler(
   allowedUserIds: number[],
   sendMessage: (chatId: number, text: string, options: object) => Promise<unknown>,
+  onError?: (chatId: number, err: Error) => void,
 ) {
   return async (msg: SlackNewMessage): Promise<void> => {
     const text = formatForTelegram(msg)
@@ -43,8 +44,8 @@ export function createSlackForwardHandler(
     for (const chatId of allowedUserIds) {
       try {
         await sendMessage(chatId, text, { parse_mode: "HTML", reply_markup })
-      } catch {
-        // non-fatal — user may not have started bot yet
+      } catch (err) {
+        onError?.(chatId, err as Error)
       }
     }
   }
@@ -88,6 +89,7 @@ export function registerSlackHandlers(bot: Bot, slack: SlackClient, claude: Clau
 
     await ctx.answerCallbackQuery("Generating AI response…")
     await ctx.replyWithChatAction("typing")
+    await slack.addReaction(channelId, ts, "thumbsup")
 
     const originalMsg = await slack.getMessageByTs(channelId, ts)
     const msgText = originalMsg?.text ?? "(message unavailable)"
