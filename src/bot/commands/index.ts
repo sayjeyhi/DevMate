@@ -21,6 +21,7 @@ import {
   handleCommentStart,
   pendingComments,
 } from "./my-tickets"
+import { handleAsk, handleAskRepoChoice, pendingAsk, askQuestion } from "./ask"
 
 export interface Clients {
   jira: JiraClient
@@ -32,6 +33,14 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
   // Intercept pending comment replies before command routing
   bot.on("message:text", async (ctx, next) => {
     const chatId = ctx.chat.id
+
+    const askPending = pendingAsk.get(chatId)
+    if (askPending && !askPending.inlineQuestion) {
+      pendingAsk.delete(chatId)
+      await askQuestion(ctx, clients, ctx.message.text, askPending.repoPath)
+      return
+    }
+
     const key = pendingComments.get(chatId)
     if (key) {
       pendingComments.delete(chatId)
@@ -44,6 +53,7 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
       }
       return
     }
+
     return next()
   })
 
@@ -53,6 +63,7 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
   commands.command("move", "Move a ticket to a new status", ctx => handleMove(ctx, clients))
   commands.command("comment", "Add a comment to a ticket", ctx => handleComment(ctx, clients))
   commands.command("solve", "Ask Claude for a solution to a ticket", ctx => handleSolve(ctx, clients))
+  commands.command("ask", "Ask Claude a question about a repo", ctx => handleAsk(ctx, clients))
   commands.command("my_tickets", "List your last 10 assigned Jira tickets", ctx => handleMyTickets(ctx, clients))
   commands.command("logs", "Show recent daemon logs", ctx => handleLogs(ctx))
   commands.command("help", "Show available commands", ctx => handleHelp(ctx))
@@ -100,6 +111,11 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
   bot.callbackQuery(/^tkt:comment:([A-Z]+-\d+)$/, async ctx => {
     const key = (ctx.match as RegExpMatchArray)[1]
     await handleCommentStart(ctx, key)
+  })
+
+  bot.callbackQuery(/^ask:repo:(\d+)$/, async ctx => {
+    const idx = parseInt((ctx.match as RegExpMatchArray)[1], 10)
+    await handleAskRepoChoice(ctx, clients, idx)
   })
 
   bot.callbackQuery(/^tkt:repo:([A-Z]+-\d+):(\d+)$/, async ctx => {

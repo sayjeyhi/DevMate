@@ -126,12 +126,12 @@ export class ClaudeClient {
 
             if (options?.onProgress && Date.now() - lastProgressAt > 2000) {
               lastProgressAt = Date.now()
-              await options.onProgress(textLines.slice(-10))
+              await options.onProgress([...textLines])
             }
           }
           // Final progress flush after stream ends
           if (options?.onProgress && textLines.length > 0) {
-            await options.onProgress(textLines.slice(-10))
+            await options.onProgress([...textLines])
           }
         })(),
         (async () => { stderr = await new Response(proc.stderr).text() })(),

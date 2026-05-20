@@ -12,7 +12,7 @@ export interface AskOptions {
   timeoutMs?: number
   /** Overrides ClaudeConfig.model for this specific call. */
   model?: string
-  /** Called periodically with the last ≤10 lines of text generated so far. */
+  /** Called periodically with all text lines generated so far. */
   onProgress?: (lines: string[]) => Promise<void>
   /** Working directory for the Claude subprocess. Defaults to process.cwd(). */
   cwd?: string
