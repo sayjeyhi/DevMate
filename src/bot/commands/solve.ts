@@ -186,6 +186,21 @@ export async function handleBranchPicker(ctx: Context, clients: Clients, key: st
   const statusLine = clean ? "✅ working tree clean" : "⚠️ uncommitted changes"
   const newBranch = branchName(key)
 
+  const keyboard = clean
+    ? [[
+        { text: `🌿 New branch (${newBranch})`, callback_data: `tkt:branch:${key}:new` },
+        { text: `📌 Stay on ${branch}`, callback_data: `tkt:branch:${key}:curr` },
+      ]]
+    : [
+        [
+          { text: `🗂 Stash & new branch (${newBranch})`, callback_data: `tkt:branch:${key}:stash` },
+        ],
+        [
+          { text: `🌿 New branch (keep changes)`, callback_data: `tkt:branch:${key}:new` },
+          { text: `📌 Stay on ${branch}`, callback_data: `tkt:branch:${key}:curr` },
+        ],
+      ]
+
   await ctx.reply(
     [
       `🌿 <b>${escHtml(key)}</b> — select branch:`,
@@ -193,15 +208,7 @@ export async function handleBranchPicker(ctx: Context, clients: Clients, key: st
       `Branch: <code>${escHtml(branch)}</code>`,
       `Status: ${statusLine}`,
     ].join("\n"),
-    {
-      parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: `🌿 New branch (${newBranch})`, callback_data: `tkt:branch:${key}:new` },
-          { text: `📌 Stay on ${branch}`, callback_data: `tkt:branch:${key}:curr` },
-        ]],
-      },
-    },
+    { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } },
   )
   if (ctx.callbackQuery) await ctx.answerCallbackQuery()
 }
@@ -210,7 +217,7 @@ export async function handleBranchChoice(
   ctx: Context,
   clients: Clients,
   key: string,
-  choice: "new" | "curr",
+  choice: "new" | "curr" | "stash",
 ): Promise<void> {
   const chatId = ctx.chat!.id
   const git = pendingGits.get(`${chatId}:${key}`)
@@ -224,7 +231,21 @@ export async function handleBranchChoice(
 
   const cwd = git.repoPath
 
-  if (choice === "new") {
+  if (choice === "stash") {
+    const statusMsg = await ctx.reply("🗂 Stashing changes…")
+    try {
+      await git.stash(`wip before ${key}`)
+      await ctx.api.editMessageText(chatId, statusMsg.message_id, "✅ Changes stashed")
+    } catch (err) {
+      await ctx.api.editMessageText(
+        chatId, statusMsg.message_id,
+        `⚠️ Stash failed: ${escHtml((err as Error).message)} — continuing with changes`,
+        { parse_mode: "HTML" },
+      )
+    }
+  }
+
+  if (choice === "new" || choice === "stash") {
     const branch = branchName(key)
     const statusMsg = await ctx.reply(
       `⏳ Checking out <code>${escHtml(branch)}</code>...`,

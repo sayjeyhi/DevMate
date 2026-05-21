@@ -128,9 +128,9 @@ export async function registerCommands(bot: Bot, clients: Clients): Promise<void
     await handleRepoChoice(ctx, clients, key, parseInt(idxStr, 10))
   })
 
-  bot.callbackQuery(/^tkt:branch:([A-Z]+-\d+):(new|curr)$/, async ctx => {
+  bot.callbackQuery(/^tkt:branch:([A-Z]+-\d+):(new|curr|stash)$/, async ctx => {
     const [, key, choice] = ctx.match as RegExpMatchArray
-    await handleBranchChoice(ctx, clients, key, choice as "new" | "curr")
+    await handleBranchChoice(ctx, clients, key, choice as "new" | "curr" | "stash")
   })
 
   // setCommands syncs the UI menu — failure is non-fatal, bot routing still works

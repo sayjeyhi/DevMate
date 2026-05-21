@@ -45,6 +45,18 @@ export class GitClient {
     return exitCode === 0
   }
 
+  async stash(message?: string): Promise<void> {
+    const args = ['git', 'stash', 'push', '--include-untracked']
+    if (message) args.push('-m', message)
+    const { exitCode, stderr } = await this.exec(args)
+    if (exitCode !== 0) throw new Error(stderr || 'git stash failed')
+  }
+
+  async stashPop(): Promise<void> {
+    const { exitCode, stderr } = await this.exec(['git', 'stash', 'pop'])
+    if (exitCode !== 0) throw new Error(stderr || 'git stash pop failed')
+  }
+
   async getDiffStat(): Promise<string> {
     const { stdout } = await this.exec(['git', 'diff', 'HEAD', '--stat'])
     return stdout.trim()

@@ -264,7 +264,42 @@ export async function handleAskSessionCallback(
       await ctx.reply("No repo in this session — cannot create branch.")
       return
     }
+    const clean = await session.git.isClean().catch(() => true)
+    if (!clean) {
+      await ctx.reply("⚠️ Working tree has uncommitted changes. What would you like to do?", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🗂 Stash & create branch", callback_data: "ask:stashbranch" }],
+            [{ text: "🌿 Create branch (keep changes)", callback_data: "ask:branchkeep" }],
+          ],
+        },
+      })
+      return
+    }
     pendingAsk.set(chatId, { repoPath: session.repoPath, mode: "branch" })
+    await ctx.reply("🌿 Enter branch name:")
+    return
+  }
+
+  if (action === "stashbranch") {
+    await ctx.answerCallbackQuery()
+    const git = session?.git
+    if (!git) { await ctx.reply("No repo in this session."); return }
+    try {
+      await ctx.replyWithChatAction("typing")
+      await git.stash("wip before ask session branch")
+      await ctx.reply("✅ Changes stashed.")
+    } catch (err) {
+      await ctx.reply(`⚠️ Stash failed: ${escapeHtml((err as Error).message)} — continuing anyway.`, { parse_mode: "HTML" })
+    }
+    pendingAsk.set(chatId, { repoPath: session?.repoPath, mode: "branch" })
+    await ctx.reply("🌿 Enter branch name:")
+    return
+  }
+
+  if (action === "branchkeep") {
+    await ctx.answerCallbackQuery()
+    pendingAsk.set(chatId, { repoPath: session?.repoPath, mode: "branch" })
     await ctx.reply("🌿 Enter branch name:")
     return
   }
