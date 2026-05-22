@@ -1,13 +1,21 @@
+#[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
 use serde_json::json;
 
+#[cfg(target_os = "macos")]
 use crate::config::loader::{config_exists, load_config, write_config};
+#[cfg(target_os = "macos")]
 use crate::config::wizard::run_wizard;
+#[cfg(target_os = "macos")]
 use crate::daemon::launchd::{agent_status, load_agent, unload_agent, write_plist};
+#[cfg(target_os = "macos")]
 use crate::daemon::pid::read_pid;
+#[cfg(target_os = "macos")]
 use crate::logger::{append_to_log_file, Level};
 use crate::shared::errors::{AppError, FriendlyError};
+#[cfg(target_os = "macos")]
 use crate::shared::paths::PATHS;
 
 #[cfg(not(target_os = "macos"))]

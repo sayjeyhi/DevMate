@@ -19,6 +19,7 @@ pub struct AgentStatus {
 // Environment keys forwarded into the launchd agent
 // ---------------------------------------------------------------------------
 
+#[cfg(target_os = "macos")]
 const FORWARDED_ENV_KEYS: &[&str] = &[
     "HOME",
     "PATH",
@@ -31,6 +32,7 @@ const FORWARDED_ENV_KEYS: &[&str] = &[
 // Plist generation
 // ---------------------------------------------------------------------------
 
+#[cfg(target_os = "macos")]
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -40,6 +42,7 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// Generate a macOS launchd plist XML string for the devm8 daemon.
+#[cfg(target_os = "macos")]
 pub fn generate_plist(binary_path: &str) -> String {
     let env_entries = FORWARDED_ENV_KEYS
         .iter()
@@ -96,6 +99,7 @@ pub fn generate_plist(binary_path: &str) -> String {
 }
 
 /// Write the plist to disk atomically (tmp → rename).
+#[cfg(target_os = "macos")]
 pub async fn write_plist(binary_path: &str, file_path: Option<&Path>) -> Result<(), AppError> {
     let target = file_path
         .map(|p| p.to_path_buf())
@@ -141,6 +145,7 @@ fn run_launchctl(args: &[&str]) -> Result<LaunchctlOutput, AppError> {
 }
 
 /// Load the launchd agent (`launchctl load -w <plist>`).
+#[cfg(target_os = "macos")]
 pub async fn load_agent() -> Result<(), AppError> {
     let plist = PATHS.plist_file.to_string_lossy().into_owned();
     let out = run_launchctl(&["load", "-w", &plist])?;
