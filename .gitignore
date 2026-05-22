@@ -1,6 +1,2 @@
 .idea
-node_modules
-jira-assistant
-
-/target/debug/
-rust/target/
+/target/
