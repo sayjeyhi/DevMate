@@ -16,8 +16,8 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 fn binary_name() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Some("devm8-macos-arm64"),
-        ("macos", "x86_64")  => Some("devm8-macos-x64"),
-        ("linux", "x86_64")  => Some("devm8-linux-x64"),
+        ("macos", "x86_64") => Some("devm8-macos-x64"),
+        ("linux", "x86_64") => Some("devm8-linux-x64"),
         _ => None,
     }
 }
@@ -115,8 +115,7 @@ pub async fn update_command() -> Result<(), AppError> {
     let bin_name = binary_name().ok_or_else(|| {
         AppError::Friendly(FriendlyError::with_hint(
             "Unsupported platform".to_string(),
-            "Pre-built binaries are available for macOS (arm64/x64) and Linux (x64)."
-                .to_string(),
+            "Pre-built binaries are available for macOS (arm64/x64) and Linux (x64).".to_string(),
         ))
     })?;
 
@@ -144,8 +143,8 @@ pub async fn update_command() -> Result<(), AppError> {
     // ------------------------------------------------------------------
     let tag = &latest;
     let base_url = format!("https://github.com/{REPO}/releases/download/{tag}");
-    let bin_url  = format!("{base_url}/{bin_name}");
-    let sum_url  = format!("{base_url}/checksums.txt");
+    let bin_url = format!("{base_url}/{bin_name}");
+    let sum_url = format!("{base_url}/checksums.txt");
 
     println!("Downloading {}…", bin_name);
     let client = reqwest::Client::new();

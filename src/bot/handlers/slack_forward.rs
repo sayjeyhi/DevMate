@@ -29,10 +29,7 @@ pub async fn create_slack_forward_handler(
 
     let keyboard = InlineKeyboardMarkup::new(vec![vec![
         InlineKeyboardButton::callback("Reply", format!("slack:reply:{}:{}", channel_id, ts)),
-        InlineKeyboardButton::callback(
-            "Answer with AI",
-            format!("slack:ai:{}:{}", channel_id, ts),
-        ),
+        InlineKeyboardButton::callback("Answer with AI", format!("slack:ai:{}:{}", channel_id, ts)),
     ]]);
 
     for user_id in &allowed_user_ids {
@@ -95,11 +92,8 @@ pub async fn handle_pending_slack_reply(
                     &format!("slack: failed to send reply: {e}"),
                     Some(&json!({ "channel": &pending.channel_id })),
                 );
-                bot.send_message(
-                    msg.chat.id,
-                    format!("Failed to send Slack reply: {e}"),
-                )
-                .await?;
+                bot.send_message(msg.chat.id, format!("Failed to send Slack reply: {e}"))
+                    .await?;
             }
         }
     } else {
@@ -110,11 +104,7 @@ pub async fn handle_pending_slack_reply(
     Ok(())
 }
 
-pub async fn handle_slack_callback(
-    bot: Bot,
-    q: CallbackQuery,
-    state: Arc<AppState>,
-) -> Result<()> {
+pub async fn handle_slack_callback(bot: Bot, q: CallbackQuery, state: Arc<AppState>) -> Result<()> {
     let _ = bot.answer_callback_query(q.id.clone()).await;
 
     let data = q.data.as_deref().unwrap_or("");
@@ -180,9 +170,7 @@ pub async fn handle_slack_callback(
                         slack_msg.text
                     );
 
-                    let thinking = bot
-                        .send_message(chat_id, "Generating AI draft...")
-                        .await?;
+                    let thinking = bot.send_message(chat_id, "Generating AI draft...").await?;
 
                     match state.claude.ask(&prompt, AskOptions::default()).await {
                         Ok(draft) => {
@@ -214,8 +202,7 @@ pub async fn handle_slack_callback(
                             ]]);
 
                             {
-                                let mut entry =
-                                    state.chat_states.entry(chat_id.0).or_default();
+                                let mut entry = state.chat_states.entry(chat_id.0).or_default();
                                 entry.pending_slack_reply = Some(PendingSlackAction {
                                     channel_id,
                                     thread_ts: Some(ts),
@@ -228,10 +215,9 @@ pub async fn handle_slack_callback(
                                 .await?;
                         }
                         Err(e) => {
-                            state.logger.error(
-                                &format!("slack: Claude error generating draft: {e}"),
-                                None,
-                            );
+                            state
+                                .logger
+                                .error(&format!("slack: Claude error generating draft: {e}"), None);
                             bot.edit_message_text(
                                 chat_id,
                                 thinking.id,
@@ -241,11 +227,8 @@ pub async fn handle_slack_callback(
                         }
                     }
                 } else {
-                    bot.send_message(
-                        chat_id,
-                        "Could not retrieve the original Slack message.",
-                    )
-                    .await?;
+                    bot.send_message(chat_id, "Could not retrieve the original Slack message.")
+                        .await?;
                 }
             } else {
                 bot.send_message(chat_id, "Slack integration is not configured.")

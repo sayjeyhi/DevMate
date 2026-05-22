@@ -6,7 +6,7 @@ use crate::config::loader::{config_exists, load_config, write_config};
 use crate::config::wizard::run_wizard;
 use crate::daemon::launchd::{agent_status, load_agent, unload_agent, write_plist};
 use crate::daemon::pid::read_pid;
-use crate::logger::{Level, append_to_log_file};
+use crate::logger::{append_to_log_file, Level};
 use crate::shared::errors::{AppError, FriendlyError};
 use crate::shared::paths::PATHS;
 

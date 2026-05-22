@@ -5,10 +5,7 @@ pub fn parse_args(text: &str) -> Vec<String> {
     if trimmed.is_empty() {
         return Vec::new();
     }
-    trimmed
-        .split_whitespace()
-        .map(str::to_string)
-        .collect()
+    trimmed.split_whitespace().map(str::to_string).collect()
 }
 
 /// Split `input` into the first whitespace-delimited token and everything after.

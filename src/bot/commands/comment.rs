@@ -29,17 +29,15 @@ pub async fn handle_comment(
         }
     };
 
-    state.logger.info(
-        "comment: adding comment",
-        Some(&json!({ "key": &key })),
-    );
+    state
+        .logger
+        .info("comment: adding comment", Some(&json!({ "key": &key })));
 
     match state.jira.add_comment(&key, &text).await {
         Ok(()) => {
-            state.logger.info(
-                "comment: comment added",
-                Some(&json!({ "key": &key })),
-            );
+            state
+                .logger
+                .info("comment: comment added", Some(&json!({ "key": &key })));
             bot.send_message(msg.chat.id, format!("Comment added to <b>{}</b>", key))
                 .parse_mode(ParseMode::Html)
                 .await?;

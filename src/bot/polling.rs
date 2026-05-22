@@ -9,14 +9,13 @@ use tokio_util::sync::CancellationToken;
 use crate::config::schema::AppConfig;
 use crate::logger::Logger;
 
-use super::AppState;
 use super::commands::{
-    handle_ask, handle_ask_session_callback, handle_ask_text_input, handle_comment,
-    handle_create, handle_help, handle_logs, handle_move, handle_my_tickets,
-    handle_my_tickets_callback, handle_pending_comment, handle_solve,
-    handle_solve_repo_callback,
+    handle_ask, handle_ask_session_callback, handle_ask_text_input, handle_comment, handle_create,
+    handle_help, handle_logs, handle_move, handle_my_tickets, handle_my_tickets_callback,
+    handle_pending_comment, handle_solve, handle_solve_repo_callback,
 };
 use super::handlers::{handle_pending_slack_reply, handle_slack_callback};
+use super::AppState;
 
 // ---------------------------------------------------------------------------
 // Command enum
@@ -69,7 +68,11 @@ pub async fn start_polling(
         .map(|me| me.username().to_string())
         .unwrap_or_default();
 
-    let state = Arc::new(AppState::new(config.clone(), Arc::clone(logger), bot_username)?);
+    let state = Arc::new(AppState::new(
+        config.clone(),
+        Arc::clone(logger),
+        bot_username,
+    )?);
 
     logger.info(
         "telegram bot starting",
@@ -82,46 +85,39 @@ pub async fn start_polling(
     }
 
     // Build allowed IDs set
-    let allowed_ids: Arc<HashSet<i64>> = Arc::new(
-        config
-            .telegram
-            .allowed_user_ids
-            .iter()
-            .copied()
-            .collect(),
-    );
+    let allowed_ids: Arc<HashSet<i64>> =
+        Arc::new(config.telegram.allowed_user_ids.iter().copied().collect());
 
     // Start Slack poller if configured
     let slack_cancel_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let _slack_poller_handle = if let (Some(slack_cfg), Some(slack_client)) =
-        (&config.slack, state.slack.clone())
-    {
-        let bot_clone = bot.clone();
-        let allowed_ids_clone = allowed_ids.clone();
-        let interval_ms = slack_cfg.poll_interval_ms;
-        let cancelled_clone = Arc::clone(&slack_cancel_flag);
+    let _slack_poller_handle =
+        if let (Some(slack_cfg), Some(slack_client)) = (&config.slack, state.slack.clone()) {
+            let bot_clone = bot.clone();
+            let allowed_ids_clone = allowed_ids.clone();
+            let interval_ms = slack_cfg.poll_interval_ms;
+            let cancelled_clone = Arc::clone(&slack_cancel_flag);
 
-        let handle = tokio::spawn(async move {
-            use crate::slack::poller::{MessageHandler, SlackPoller};
+            let handle = tokio::spawn(async move {
+                use crate::slack::poller::{MessageHandler, SlackPoller};
 
-            let bot_inner = bot_clone.clone();
-            let ids: Vec<i64> = allowed_ids_clone.iter().copied().collect();
+                let bot_inner = bot_clone.clone();
+                let ids: Vec<i64> = allowed_ids_clone.iter().copied().collect();
 
-            let on_message: MessageHandler = Box::new(move |new_msg| {
-                let bot = bot_inner.clone();
-                let ids = ids.clone();
-                Box::pin(async move {
-                    crate::bot::handlers::create_slack_forward_handler(bot, ids, &new_msg).await
-                })
+                let on_message: MessageHandler = Box::new(move |new_msg| {
+                    let bot = bot_inner.clone();
+                    let ids = ids.clone();
+                    Box::pin(async move {
+                        crate::bot::handlers::create_slack_forward_handler(bot, ids, &new_msg).await
+                    })
+                });
+
+                let poller = SlackPoller::new(slack_client, interval_ms, on_message, None);
+                poller.start(cancelled_clone).await;
             });
-
-            let poller = SlackPoller::new(slack_client, interval_ms, on_message, None);
-            poller.start(cancelled_clone).await;
-        });
-        Some(handle)
-    } else {
-        None
-    };
+            Some(handle)
+        } else {
+            None
+        };
 
     // Cancel Slack poller when the main token fires
     let ct_slack = ct.clone();
@@ -134,14 +130,10 @@ pub async fn start_polling(
     // Build the dispatcher
     let handler = build_handler();
 
-    let listener = teloxide::update_listeners::polling_default(
-        Bot::new(&config.telegram.bot_token),
-    )
-    .await;
+    let listener =
+        teloxide::update_listeners::polling_default(Bot::new(&config.telegram.bot_token)).await;
 
-    let err_handler = LoggingErrorHandler::with_custom_text(
-        "Dispatcher error in update handler",
-    );
+    let err_handler = LoggingErrorHandler::with_custom_text("Dispatcher error in update handler");
     let listener_err_handler = LoggingErrorHandler::with_custom_text("Polling listener error");
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), handler)

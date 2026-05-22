@@ -134,7 +134,12 @@ impl JiraClient {
 
         let base_url = format!("https://{}/rest/api/3", config.host);
 
-        Ok(Self { config, http, base_url, auth_header })
+        Ok(Self {
+            config,
+            http,
+            base_url,
+            auth_header,
+        })
     }
 
     /// Expose the configured project keys.
@@ -152,29 +157,21 @@ impl JiraClient {
             AUTHORIZATION,
             HeaderValue::from_str(&self.auth_header).expect("auth header is ASCII"),
         );
-        headers.insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-        headers.insert(
-            "Accept",
-            HeaderValue::from_static("application/json"),
-        );
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("Accept", HeaderValue::from_static("application/json"));
         headers
     }
 
-    async fn handle_response_error(
-        &self,
-        resp: Response,
-        issue_key: Option<&str>,
-    ) -> AppError {
+    async fn handle_response_error(&self, resp: Response, issue_key: Option<&str>) -> AppError {
         let status = resp.status();
         match status {
             StatusCode::UNAUTHORIZED => AppError::Jira(JiraError::Auth),
             StatusCode::FORBIDDEN => AppError::Jira(JiraError::Permission),
             StatusCode::NOT_FOUND => {
                 if let Some(key) = issue_key {
-                    AppError::Jira(JiraError::NotFound { issue_key: key.to_string() })
+                    AppError::Jira(JiraError::NotFound {
+                        issue_key: key.to_string(),
+                    })
                 } else {
                     AppError::Jira(JiraError::Server { status: 404 })
                 }
@@ -214,7 +211,10 @@ impl JiraClient {
             })?;
 
         if resp.status().is_success() {
-            let body = resp.json::<T>().await.map_err(|e| AppError::Other(e.into()))?;
+            let body = resp
+                .json::<T>()
+                .await
+                .map_err(|e| AppError::Other(e.into()))?;
             Ok(body)
         } else {
             Err(self.handle_response_error(resp, None).await)
@@ -252,7 +252,10 @@ impl JiraClient {
             })?;
 
         if resp.status().is_success() {
-            let body = resp.json::<T>().await.map_err(|e| AppError::Other(e.into()))?;
+            let body = resp
+                .json::<T>()
+                .await
+                .map_err(|e| AppError::Other(e.into()))?;
             Ok(body)
         } else {
             Err(self.handle_response_error(resp, issue_key).await)
@@ -345,7 +348,11 @@ impl JiraClient {
     ) -> Result<Vec<(String, String)>, AppError> {
         let path = format!("/issue/{}/transitions", issue_key);
         let resp: JiraTransitionsResponse = self.get(&path, &[]).await?;
-        Ok(resp.transitions.into_iter().map(|t| (t.id, t.name)).collect())
+        Ok(resp
+            .transitions
+            .into_iter()
+            .map(|t| (t.id, t.name))
+            .collect())
     }
 
     /// Transition an issue to a new status.
@@ -364,11 +371,11 @@ impl JiraClient {
         let id = match transition_id {
             Some(id) => id,
             None => {
-                let available: Vec<String> =
-                    transitions.iter().map(|(_, n)| n.clone()).collect();
-                return Err(AppError::InvalidTransition(
-                    InvalidTransitionError::new(target_status, available),
-                ));
+                let available: Vec<String> = transitions.iter().map(|(_, n)| n.clone()).collect();
+                return Err(AppError::InvalidTransition(InvalidTransitionError::new(
+                    target_status,
+                    available,
+                )));
             }
         };
 
@@ -392,7 +399,10 @@ impl JiraClient {
         let projects: Vec<JiraProject> = self.get("/project", &[]).await?;
         Ok(projects
             .into_iter()
-            .map(|p| ProjectInfo { key: p.key, name: p.name })
+            .map(|p| ProjectInfo {
+                key: p.key,
+                name: p.name,
+            })
             .collect())
     }
 
@@ -404,10 +414,7 @@ impl JiraClient {
             .map(|s| StatusInfo {
                 id: s.id,
                 name: s.name,
-                category: s
-                    .status_category
-                    .map(|c| c.name)
-                    .unwrap_or_default(),
+                category: s.status_category.map(|c| c.name).unwrap_or_default(),
             })
             .collect())
     }
@@ -472,9 +479,7 @@ impl JiraClient {
                 let _ = u; // suppress unused warning
                 base
             })
-            .unwrap_or_else(|| {
-                format!("https://{}/browse/{}", self.config.host, raw.key)
-            });
+            .unwrap_or_else(|| format!("https://{}/browse/{}", self.config.host, raw.key));
 
         JiraIssue {
             key: raw.key,

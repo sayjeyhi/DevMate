@@ -60,25 +60,35 @@ fn collect_telegram(existing: Option<&TelegramConfig>) -> Result<TelegramConfig,
         .map_err(|e| prompt_err("telegram.bot_token", e))?;
 
     let ids_default = existing
-        .map(|c| c.allowed_user_ids.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "))
+        .map(|c| {
+            c.allowed_user_ids
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
         .unwrap_or_default();
 
-    let allowed_user_ids_raw = Text::new("Allowed Telegram user IDs (comma-separated, e.g. 12345, 67890):")
-        .with_initial_value(&ids_default)
-        .with_validator(|v: &str| {
-            if v.trim().is_empty() {
-                return Ok(inquire::validator::Validation::Valid);
-            }
-            Ok(validators::validate_allowed_user_ids(v)
-                .map(|e| inquire::validator::Validation::Invalid(e.into()))
-                .unwrap_or(inquire::validator::Validation::Valid))
-        })
-        .prompt()
-        .map_err(|e| prompt_err("telegram.allowed_user_ids", e))?;
+    let allowed_user_ids_raw =
+        Text::new("Allowed Telegram user IDs (comma-separated, e.g. 12345, 67890):")
+            .with_initial_value(&ids_default)
+            .with_validator(|v: &str| {
+                if v.trim().is_empty() {
+                    return Ok(inquire::validator::Validation::Valid);
+                }
+                Ok(validators::validate_allowed_user_ids(v)
+                    .map(|e| inquire::validator::Validation::Invalid(e.into()))
+                    .unwrap_or(inquire::validator::Validation::Valid))
+            })
+            .prompt()
+            .map_err(|e| prompt_err("telegram.allowed_user_ids", e))?;
 
     let allowed_user_ids = parse_ids(&allowed_user_ids_raw);
 
-    Ok(TelegramConfig { bot_token, allowed_user_ids })
+    Ok(TelegramConfig {
+        bot_token,
+        allowed_user_ids,
+    })
 }
 
 fn collect_jira(existing: Option<&JiraConfig>) -> Result<JiraConfig, AppError> {
@@ -117,7 +127,12 @@ fn collect_jira(existing: Option<&JiraConfig>) -> Result<JiraConfig, AppError> {
     // Try to fetch project keys from Jira — fall back to manual entry.
     let project_keys = collect_project_keys(&base_url, &api_token, &email, existing)?;
 
-    Ok(JiraConfig { base_url, api_token, email, project_keys })
+    Ok(JiraConfig {
+        base_url,
+        api_token,
+        email,
+        project_keys,
+    })
 }
 
 fn collect_project_keys(
@@ -178,7 +193,11 @@ fn collect_project_keys(
 }
 
 /// Best-effort synchronous fetch of Jira project keys using `reqwest::blocking`.
-fn fetch_jira_projects(base_url: &str, api_token: &str, email: &str) -> anyhow::Result<Vec<String>> {
+fn fetch_jira_projects(
+    base_url: &str,
+    api_token: &str,
+    email: &str,
+) -> anyhow::Result<Vec<String>> {
     let url = format!("{}/rest/api/3/project", base_url.trim_end_matches('/'));
 
     let client = reqwest::blocking::Client::builder()
@@ -223,9 +242,16 @@ fn collect_claude(existing: Option<&ClaudeConfig>) -> Result<ClaudeConfig, AppEr
         .prompt()
         .map_err(|e| prompt_err("claude.api_key", e))?;
 
-    let api_key = if api_key_raw.trim().is_empty() { None } else { Some(api_key_raw.trim().to_string()) };
+    let api_key = if api_key_raw.trim().is_empty() {
+        None
+    } else {
+        Some(api_key_raw.trim().to_string())
+    };
 
-    Ok(ClaudeConfig { binary_path, api_key })
+    Ok(ClaudeConfig {
+        binary_path,
+        api_key,
+    })
 }
 
 fn collect_repos(
@@ -255,18 +281,20 @@ fn collect_repos(
             .map(|v| v.join(", "))
             .unwrap_or_default();
 
-        let raw = Text::new(&format!("Repo paths for {key} (comma-separated absolute dirs):"))
-            .with_initial_value(&default_paths)
-            .with_validator(|v: &str| {
-                if v.trim().is_empty() {
-                    return Ok(inquire::validator::Validation::Valid);
-                }
-                Ok(validators::validate_repo_paths(v)
-                    .map(|e| inquire::validator::Validation::Invalid(e.into()))
-                    .unwrap_or(inquire::validator::Validation::Valid))
-            })
-            .prompt()
-            .map_err(|e| prompt_err("repos", e))?;
+        let raw = Text::new(&format!(
+            "Repo paths for {key} (comma-separated absolute dirs):"
+        ))
+        .with_initial_value(&default_paths)
+        .with_validator(|v: &str| {
+            if v.trim().is_empty() {
+                return Ok(inquire::validator::Validation::Valid);
+            }
+            Ok(validators::validate_repo_paths(v)
+                .map(|e| inquire::validator::Validation::Invalid(e.into()))
+                .unwrap_or(inquire::validator::Validation::Valid))
+        })
+        .prompt()
+        .map_err(|e| prompt_err("repos", e))?;
 
         if !raw.trim().is_empty() {
             let paths: Vec<String> = raw
@@ -287,7 +315,7 @@ fn collect_app_settings(existing: Option<&AppSettings>) -> Result<AppSettings, A
     let options = vec!["info", "debug", "error"];
     let default_idx = existing
         .map(|s| match s.log_level {
-            LogLevel::Info  => 0,
+            LogLevel::Info => 0,
             LogLevel::Debug => 1,
             LogLevel::Error => 2,
         })
@@ -331,18 +359,21 @@ fn collect_slack(existing: Option<&SlackConfig>) -> Result<Option<SlackConfig>, 
 
     let poll_raw = Text::new("Poll interval in milliseconds:")
         .with_initial_value(&poll_interval_default)
-        .with_validator(|v: &str| {
-            match v.trim().parse::<u64>() {
-                Ok(n) if n > 0 => Ok(inquire::validator::Validation::Valid),
-                _ => Ok(inquire::validator::Validation::Invalid("Must be a positive integer".into())),
-            }
+        .with_validator(|v: &str| match v.trim().parse::<u64>() {
+            Ok(n) if n > 0 => Ok(inquire::validator::Validation::Valid),
+            _ => Ok(inquire::validator::Validation::Invalid(
+                "Must be a positive integer".into(),
+            )),
         })
         .prompt()
         .map_err(|e| prompt_err("slack.poll_interval_ms", e))?;
 
     let poll_interval_ms = poll_raw.trim().parse::<u64>().unwrap_or(30_000);
 
-    Ok(Some(SlackConfig { user_token, poll_interval_ms }))
+    Ok(Some(SlackConfig {
+        user_token,
+        poll_interval_ms,
+    }))
 }
 
 // ---------------------------------------------------------------------------

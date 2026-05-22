@@ -180,10 +180,7 @@ impl ClaudeClient {
             }
         }
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| AppError::Other(e.into()))?;
+        let status = child.wait().await.map_err(|e| AppError::Other(e.into()))?;
         let exit_code = status.code().unwrap_or(-1);
 
         let stderr_lines = stderr_handle.await.unwrap_or_default();
@@ -197,11 +194,7 @@ impl ClaudeClient {
         Ok((final_text, exit_code, stderr_lines.join("\n")))
     }
 
-    fn handle_event(
-        event: &Value,
-        text_lines: &mut Vec<String>,
-        result_text: &mut Option<String>,
-    ) {
+    fn handle_event(event: &Value, text_lines: &mut Vec<String>, result_text: &mut Option<String>) {
         let event_type = event.get("type").and_then(Value::as_str).unwrap_or("");
 
         match event_type {

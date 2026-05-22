@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Regex constants (mirrors TypeScript)
@@ -48,7 +48,9 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
-        Self { log_level: LogLevel::Info }
+        Self {
+            log_level: LogLevel::Info,
+        }
     }
 }
 
@@ -67,7 +69,7 @@ fn default_log_level() -> LogLevel {
 impl std::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LogLevel::Info  => write!(f, "info"),
+            LogLevel::Info => write!(f, "info"),
             LogLevel::Debug => write!(f, "debug"),
             LogLevel::Error => write!(f, "error"),
         }
@@ -78,10 +80,10 @@ impl std::str::FromStr for LogLevel {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "info"  => Ok(LogLevel::Info),
+            "info" => Ok(LogLevel::Info),
             "debug" => Ok(LogLevel::Debug),
             "error" => Ok(LogLevel::Error),
-            other   => Err(format!("unknown log level: {other}")),
+            other => Err(format!("unknown log level: {other}")),
         }
     }
 }

@@ -42,8 +42,7 @@ fn format_tickets_page(issues: &[JiraIssue], bot_username: &str) -> String {
             } else {
                 format!(
                     "  <a href=\"https://t.me/{}?start={}\">[details]</a>",
-                    bot_username,
-                    i.key,
+                    bot_username, i.key,
                 )
             };
             format!(
@@ -63,11 +62,20 @@ fn format_tickets_page(issues: &[JiraIssue], bot_username: &str) -> String {
 fn build_list_keyboard(page: usize, has_next: bool) -> InlineKeyboardMarkup {
     let mut nav_row: Vec<InlineKeyboardButton> = Vec::new();
     if page > 0 {
-        nav_row.push(InlineKeyboardButton::callback("\u{2190} Prev", format!("tickets:page:{}", page - 1)));
+        nav_row.push(InlineKeyboardButton::callback(
+            "\u{2190} Prev",
+            format!("tickets:page:{}", page - 1),
+        ));
     }
-    nav_row.push(InlineKeyboardButton::callback("\u{21ba} Refresh", format!("tickets:refresh:{}", page)));
+    nav_row.push(InlineKeyboardButton::callback(
+        "\u{21ba} Refresh",
+        format!("tickets:refresh:{}", page),
+    ));
     if has_next {
-        nav_row.push(InlineKeyboardButton::callback("Next \u{2192}", format!("tickets:page:{}", page + 1)));
+        nav_row.push(InlineKeyboardButton::callback(
+            "Next \u{2192}",
+            format!("tickets:page:{}", page + 1),
+        ));
     }
     InlineKeyboardMarkup::new(vec![nav_row])
 }
@@ -80,11 +88,15 @@ fn build_details_action_keyboard(issue_key: &str, back_page: usize) -> InlineKey
         ],
         vec![
             InlineKeyboardButton::callback("Move", format!("tickets:move_start:{}", issue_key)),
-            InlineKeyboardButton::callback("Comment", format!("tickets:comment_start:{}", issue_key)),
+            InlineKeyboardButton::callback(
+                "Comment",
+                format!("tickets:comment_start:{}", issue_key),
+            ),
         ],
-        vec![
-            InlineKeyboardButton::callback("\u{2190} Back to list", format!("tickets:page:{}", back_page)),
-        ],
+        vec![InlineKeyboardButton::callback(
+            "\u{2190} Back to list",
+            format!("tickets:page:{}", back_page),
+        )],
     ])
 }
 
@@ -92,15 +104,12 @@ fn build_details_action_keyboard(issue_key: &str, back_page: usize) -> InlineKey
 // Main command entry
 // ---------------------------------------------------------------------------
 
-pub async fn handle_my_tickets(
-    bot: Bot,
-    msg: Message,
-    state: Arc<AppState>,
-) -> Result<()> {
+pub async fn handle_my_tickets(bot: Bot, msg: Message, state: Arc<AppState>) -> Result<()> {
     let project_keys = state.jira.project_keys();
 
     if project_keys.is_empty() {
-        bot.send_message(msg.chat.id, "No project keys configured.").await?;
+        bot.send_message(msg.chat.id, "No project keys configured.")
+            .await?;
         return Ok(());
     }
 
@@ -112,7 +121,12 @@ pub async fn handle_my_tickets(
     // Multiple project keys — show picker
     let buttons: Vec<Vec<InlineKeyboardButton>> = project_keys
         .iter()
-        .map(|k| vec![InlineKeyboardButton::callback(k.clone(), format!("tickets:project:{}", k))])
+        .map(|k| {
+            vec![InlineKeyboardButton::callback(
+                k.clone(),
+                format!("tickets:project:{}", k),
+            )]
+        })
         .collect();
 
     let keyboard = InlineKeyboardMarkup::new(buttons);
@@ -144,17 +158,16 @@ pub async fn handle_my_tickets_project(
                 &format!("tickets: failed to fetch statuses: {e}"),
                 Some(&json!({ "project": project_key })),
             );
-            bot.send_message(chat_id, format!("Error fetching statuses: {e}")).await?;
+            bot.send_message(chat_id, format!("Error fetching statuses: {e}"))
+                .await?;
             return Ok(());
         }
     };
 
-    let mut buttons: Vec<Vec<InlineKeyboardButton>> = vec![
-        vec![InlineKeyboardButton::callback(
-            "All statuses",
-            format!("tickets:status:{}:ALL", project_key),
-        )],
-    ];
+    let mut buttons: Vec<Vec<InlineKeyboardButton>> = vec![vec![InlineKeyboardButton::callback(
+        "All statuses",
+        format!("tickets:status:{}:ALL", project_key),
+    )]];
     for status in &statuses {
         buttons.push(vec![InlineKeyboardButton::callback(
             format!("{} {}", status_emoji(&status.name), &status.name),
@@ -354,7 +367,11 @@ pub async fn handle_ticket_details(
         escape_html(&issue.summary),
         escape_html(&issue.status),
         escape_html(&desc_preview),
-        if issue.description.len() > 400 { "..." } else { "" }
+        if issue.description.len() > 400 {
+            "..."
+        } else {
+            ""
+        }
     );
 
     let keyboard = build_details_action_keyboard(issue_key, back_page);
@@ -380,13 +397,15 @@ pub async fn handle_move_start(
     let transitions = match state.jira.get_transitions(issue_key).await {
         Ok(t) => t,
         Err(e) => {
-            bot.send_message(chat_id, format!("Error fetching transitions: {e}")).await?;
+            bot.send_message(chat_id, format!("Error fetching transitions: {e}"))
+                .await?;
             return Ok(());
         }
     };
 
     if transitions.is_empty() {
-        bot.send_message(chat_id, "No available transitions.").await?;
+        bot.send_message(chat_id, "No available transitions.")
+            .await?;
         return Ok(());
     }
 
@@ -509,11 +528,7 @@ pub async fn handle_ticket_ask(
         }
     };
 
-    let project_key = issue_key
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .to_uppercase();
+    let project_key = issue_key.split('-').next().unwrap_or("").to_uppercase();
 
     // Build context string that Claude will receive with every message
     let context = format!(
@@ -550,7 +565,10 @@ pub async fn handle_ticket_ask(
 
     if repos.len() == 1 {
         let git = repos.into_iter().next().unwrap();
-        let branch = git.current_branch().await.unwrap_or_else(|_| "unknown".into());
+        let branch = git
+            .current_branch()
+            .await
+            .unwrap_or_else(|_| "unknown".into());
         let clean = git.is_clean().await.unwrap_or(true);
 
         {
@@ -611,7 +629,10 @@ pub async fn handle_ticket_ask(
                     .and_then(|n| n.to_str())
                     .unwrap_or("repo")
             );
-            vec![InlineKeyboardButton::callback(label, format!("ask:repo:{}", i))]
+            vec![InlineKeyboardButton::callback(
+                label,
+                format!("ask:repo:{}", i),
+            )]
         })
         .collect();
 
@@ -675,7 +696,8 @@ pub async fn handle_my_tickets_callback(
             match cs.as_ref().and_then(|c| c.page_cache.as_ref()) {
                 Some(cache) => (cache.project_key.clone(), cache.status_filter.clone()),
                 None => {
-                    bot.send_message(chat_id, "No list context. Use /my_tickets.").await?;
+                    bot.send_message(chat_id, "No list context. Use /my_tickets.")
+                        .await?;
                     return Ok(());
                 }
             }

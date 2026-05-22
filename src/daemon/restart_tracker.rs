@@ -18,11 +18,7 @@ impl RestartTracker {
     /// - `file_path`    — where timestamps are persisted
     /// - `max_restarts` — maximum number of restarts allowed in `window_ms`
     /// - `window_ms`    — sliding window duration in milliseconds
-    pub fn new(
-        file_path: impl Into<PathBuf>,
-        max_restarts: usize,
-        window_ms: u64,
-    ) -> Self {
+    pub fn new(file_path: impl Into<PathBuf>, max_restarts: usize, window_ms: u64) -> Self {
         Self {
             file_path: file_path.into(),
             max_restarts,
@@ -62,8 +58,7 @@ impl RestartTracker {
     async fn read(&self) -> anyhow::Result<Vec<u64>> {
         match tokio::fs::read_to_string(&self.file_path).await {
             Ok(content) => {
-                let v: Vec<u64> = serde_json::from_str(&content)
-                    .unwrap_or_default();
+                let v: Vec<u64> = serde_json::from_str(&content).unwrap_or_default();
                 Ok(v)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
@@ -81,8 +76,8 @@ impl RestartTracker {
                 .context("Failed to create restart tracker directory")?;
         }
 
-        let json = serde_json::to_string(timestamps)
-            .context("Failed to serialize restart timestamps")?;
+        let json =
+            serde_json::to_string(timestamps).context("Failed to serialize restart timestamps")?;
 
         let tmp = self.file_path.with_extension("json.tmp");
         tokio::fs::write(&tmp, json.as_bytes())

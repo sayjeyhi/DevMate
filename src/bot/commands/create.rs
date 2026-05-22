@@ -5,8 +5,8 @@ use serde_json::json;
 use teloxide::prelude::*;
 use teloxide::types::ParseMode;
 
-use crate::bot::AppState;
 use crate::bot::utils::keep_typing;
+use crate::bot::AppState;
 use crate::claude::types::AskOptions;
 
 const ENRICH_PROMPT_TEMPLATE: &str = "\

@@ -63,7 +63,10 @@ impl SlackClient {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(60);
-            return Err(SlackRateLimitError { retry_after_seconds: retry }.into());
+            return Err(SlackRateLimitError {
+                retry_after_seconds: retry,
+            }
+            .into());
         }
 
         let val: Value = resp.json().await?;
@@ -83,13 +86,7 @@ impl SlackClient {
         // Encode the params as a form body.
         let form_body: String = params
             .iter()
-            .map(|(k, v)| {
-                format!(
-                    "{}={}",
-                    urlencoding_simple(k),
-                    urlencoding_simple(v)
-                )
-            })
+            .map(|(k, v)| format!("{}={}", urlencoding_simple(k), urlencoding_simple(v)))
             .collect::<Vec<_>>()
             .join("&");
 
@@ -108,7 +105,10 @@ impl SlackClient {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(60);
-            return Err(SlackRateLimitError { retry_after_seconds: retry }.into());
+            return Err(SlackRateLimitError {
+                retry_after_seconds: retry,
+            }
+            .into());
         }
 
         let val: Value = resp.json().await?;
@@ -134,7 +134,10 @@ impl SlackClient {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(60);
-            return Err(SlackRateLimitError { retry_after_seconds: retry }.into());
+            return Err(SlackRateLimitError {
+                retry_after_seconds: retry,
+            }
+            .into());
         }
 
         let val: Value = resp.json().await?;
@@ -181,19 +184,13 @@ impl SlackClient {
         let mut cursor = String::new();
 
         loop {
-            let mut params: Vec<(&str, &str)> = vec![
-                ("types", "im,mpim"),
-                ("limit", "200"),
-            ];
+            let mut params: Vec<(&str, &str)> = vec![("types", "im,mpim"), ("limit", "200")];
             if !cursor.is_empty() {
                 params.push(("cursor", &cursor));
             }
             // borrow issue: keep cursor as owned
             let cursor_owned = cursor.clone();
-            let mut params2: Vec<(&str, &str)> = vec![
-                ("types", "im,mpim"),
-                ("limit", "200"),
-            ];
+            let mut params2: Vec<(&str, &str)> = vec![("types", "im,mpim"), ("limit", "200")];
             if !cursor_owned.is_empty() {
                 params2.push(("cursor", &cursor_owned));
             }
@@ -236,8 +233,7 @@ impl SlackClient {
         limit: u32,
     ) -> Result<Vec<SlackMessage>> {
         let limit_str = limit.to_string();
-        let mut params: Vec<(&str, &str)> =
-            vec![("channel", channel_id), ("limit", &limit_str)];
+        let mut params: Vec<(&str, &str)> = vec![("channel", channel_id), ("limit", &limit_str)];
         let oldest_owned = oldest.map(|s| s.to_string());
         if let Some(ref o) = oldest_owned {
             params.push(("oldest", o));
@@ -274,9 +270,8 @@ impl SlackClient {
     /// Fetch user information.
     pub async fn get_user_info(&self, user_id: &str) -> Result<SlackUser> {
         let val = self.get("users.info", &[("user", user_id)]).await?;
-        let user = serde_json::from_value::<SlackUser>(
-            val.get("user").cloned().unwrap_or(Value::Null),
-        )?;
+        let user =
+            serde_json::from_value::<SlackUser>(val.get("user").cloned().unwrap_or(Value::Null))?;
         Ok(user)
     }
 
@@ -288,10 +283,7 @@ impl SlackClient {
         oldest: Option<&str>,
     ) -> Result<Vec<SlackMessage>> {
         let oldest_owned = oldest.map(|s| s.to_string());
-        let mut params: Vec<(&str, &str)> = vec![
-            ("channel", channel_id),
-            ("ts", thread_ts),
-        ];
+        let mut params: Vec<(&str, &str)> = vec![("channel", channel_id), ("ts", thread_ts)];
         if let Some(ref o) = oldest_owned {
             params.push(("oldest", o));
         }
@@ -308,18 +300,12 @@ impl SlackClient {
     }
 
     /// Add a reaction emoji to a message (non-fatal: already_reacted is ignored).
-    pub async fn add_reaction(
-        &self,
-        channel_id: &str,
-        ts: &str,
-        emoji: &str,
-    ) -> Result<()> {
+    pub async fn add_reaction(&self, channel_id: &str, ts: &str, emoji: &str) -> Result<()> {
         let result = self
-            .post("reactions.add", &[
-                ("channel", channel_id),
-                ("timestamp", ts),
-                ("name", emoji),
-            ])
+            .post(
+                "reactions.add",
+                &[("channel", channel_id), ("timestamp", ts), ("name", emoji)],
+            )
             .await;
 
         match result {
@@ -359,10 +345,9 @@ fn urlencoding_simple(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for byte in s.bytes() {
         match byte {
-            b'A'..=b'Z'
-            | b'a'..=b'z'
-            | b'0'..=b'9'
-            | b'-' | b'_' | b'.' | b'~' => out.push(byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char)
+            }
             b => out.push_str(&format!("%{:02X}", b)),
         }
     }

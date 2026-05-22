@@ -33,11 +33,7 @@ pub const HELP_TEXT: &str = "\
 /help
   Show this reference.";
 
-pub async fn handle_help(
-    bot: Bot,
-    msg: Message,
-    _state: Arc<AppState>,
-) -> Result<()> {
+pub async fn handle_help(bot: Bot, msg: Message, _state: Arc<AppState>) -> Result<()> {
     bot.send_message(msg.chat.id, HELP_TEXT)
         .parse_mode(ParseMode::Html)
         .await?;

@@ -14,11 +14,8 @@ pub struct ClaudeClientConfig {
 }
 
 /// Per-request options that override the client defaults.
-pub type ProgressCallback = Box<
-    dyn Fn(Vec<String>) -> Pin<Box<dyn std::future::Future<Output = ()> + Send>>
-        + Send
-        + Sync,
->;
+pub type ProgressCallback =
+    Box<dyn Fn(Vec<String>) -> Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 
 pub struct AskOptions {
     /// Override the client-level timeout for this call.
@@ -36,7 +33,10 @@ impl std::fmt::Debug for AskOptions {
         f.debug_struct("AskOptions")
             .field("timeout_ms", &self.timeout_ms)
             .field("model", &self.model)
-            .field("on_progress", &self.on_progress.as_ref().map(|_| "<callback>"))
+            .field(
+                "on_progress",
+                &self.on_progress.as_ref().map(|_| "<callback>"),
+            )
             .field("cwd", &self.cwd)
             .finish()
     }

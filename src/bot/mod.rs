@@ -51,7 +51,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, logger: Arc<dyn Logger>, bot_username: String) -> anyhow::Result<Self> {
+    pub fn new(
+        config: AppConfig,
+        logger: Arc<dyn Logger>,
+        bot_username: String,
+    ) -> anyhow::Result<Self> {
         // Extract the host from the base_url (strip "https://" prefix and trailing slash).
         let host = config
             .jira
@@ -83,10 +87,8 @@ impl AppState {
         let mut git_map: HashMap<String, Vec<Arc<GitClient>>> = HashMap::new();
         if let Some(repos) = &config.repos {
             for (project_key, paths) in repos {
-                let clients: Vec<Arc<GitClient>> = paths
-                    .iter()
-                    .map(|p| Arc::new(GitClient::new(p)))
-                    .collect();
+                let clients: Vec<Arc<GitClient>> =
+                    paths.iter().map(|p| Arc::new(GitClient::new(p))).collect();
                 git_map.insert(project_key.clone(), clients);
             }
         }

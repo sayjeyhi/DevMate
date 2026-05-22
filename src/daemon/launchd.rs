@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::shared::errors::{AppError, FriendlyError, LaunchctlError, launchctl_hint};
+use crate::shared::errors::{launchctl_hint, AppError, FriendlyError, LaunchctlError};
 use crate::shared::paths::PATHS;
 
 // ---------------------------------------------------------------------------
@@ -126,15 +126,12 @@ struct LaunchctlOutput {
 }
 
 fn run_launchctl(args: &[&str]) -> Result<LaunchctlOutput, AppError> {
-    let output = Command::new("launchctl")
-        .args(args)
-        .output()
-        .map_err(|e| {
-            AppError::Friendly(FriendlyError::with_hint(
-                format!("Failed to run launchctl: {e}"),
-                "Make sure you are on macOS.",
-            ))
-        })?;
+    let output = Command::new("launchctl").args(args).output().map_err(|e| {
+        AppError::Friendly(FriendlyError::with_hint(
+            format!("Failed to run launchctl: {e}"),
+            "Make sure you are on macOS.",
+        ))
+    })?;
 
     Ok(LaunchctlOutput {
         exit_code: output.status.code().unwrap_or(-1),

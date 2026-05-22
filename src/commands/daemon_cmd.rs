@@ -6,8 +6,8 @@ use tokio_util::sync::CancellationToken;
 use crate::config::loader::load_config;
 use crate::daemon::pid::{remove_pid, write_pid};
 use crate::daemon::restart_tracker::RestartTracker;
-use crate::logger::{self, Level, OutputMode};
 use crate::logger::rotate::rotate_if_needed;
+use crate::logger::{self, Level, OutputMode};
 use crate::shared::errors::AppError;
 use crate::shared::paths::PATHS;
 
@@ -34,7 +34,7 @@ pub async fn daemon_command() -> Result<(), AppError> {
     // ------------------------------------------------------------------
     let log_level = match config.app.log_level {
         crate::config::schema::LogLevel::Debug => Level::Debug,
-        crate::config::schema::LogLevel::Info  => Level::Info,
+        crate::config::schema::LogLevel::Info => Level::Info,
         crate::config::schema::LogLevel::Error => Level::Error,
     };
 
@@ -59,8 +59,7 @@ pub async fn daemon_command() -> Result<(), AppError> {
     let log_file_clone = paths.log_file.clone();
     let logger_clone = Arc::clone(&logger);
     tokio::spawn(async move {
-        let mut interval =
-            tokio::time::interval(std::time::Duration::from_secs(3600));
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
         interval.tick().await; // skip the immediate first tick
         loop {
             interval.tick().await;
@@ -99,8 +98,8 @@ pub async fn daemon_command() -> Result<(), AppError> {
         #[cfg(unix)]
         {
             use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm = signal(SignalKind::terminate())
-                .expect("Failed to install SIGTERM handler");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
             sigterm.recv().await;
             ct_term.cancel();
         }
@@ -115,12 +114,7 @@ pub async fn daemon_command() -> Result<(), AppError> {
     // ------------------------------------------------------------------
     // Run the bot / polling loop
     // ------------------------------------------------------------------
-    let poll_result = crate::bot::polling::start_polling(
-        ct.clone(),
-        &logger,
-        &config,
-    )
-    .await;
+    let poll_result = crate::bot::polling::start_polling(ct.clone(), &logger, &config).await;
 
     // ------------------------------------------------------------------
     // Graceful shutdown

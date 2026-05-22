@@ -8,23 +8,15 @@ use teloxide::types::ParseMode;
 use crate::bot::utils::parse_first_and_rest;
 use crate::bot::AppState;
 
-pub async fn handle_move(
-    bot: Bot,
-    msg: Message,
-    state: Arc<AppState>,
-    args: String,
-) -> Result<()> {
+pub async fn handle_move(bot: Bot, msg: Message, state: Arc<AppState>, args: String) -> Result<()> {
     let args = args.trim().to_string();
 
     let (key, status) = match parse_first_and_rest(&args) {
         Some(pair) => pair,
         None => {
-            bot.send_message(
-                msg.chat.id,
-                "Usage: /move &lt;issue-key&gt; &lt;status&gt;",
-            )
-            .parse_mode(ParseMode::Html)
-            .await?;
+            bot.send_message(msg.chat.id, "Usage: /move &lt;issue-key&gt; &lt;status&gt;")
+                .parse_mode(ParseMode::Html)
+                .await?;
             return Ok(());
         }
     };

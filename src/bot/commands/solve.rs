@@ -83,28 +83,29 @@ pub async fn solve_by_key(
     let msg_id_progress = status_msg_id;
     let key_progress = issue_key.to_string();
 
-    let on_progress: crate::claude::types::ProgressCallback = Box::new(move |lines: Vec<String>| {
-        let bot = bot_progress.clone();
-        let chat_id = chat_id_progress;
-        let msg_id = msg_id_progress;
-        let key = key_progress.clone();
-        let preview = lines.join("").chars().take(200).collect::<String>();
-        Box::pin(async move {
-            let text = if preview.is_empty() {
-                format!("Analyzing <b>{}</b> with Claude...", escape_html(&key))
-            } else {
-                format!(
-                    "Analyzing <b>{}</b>...\n\n<pre>{}</pre>",
-                    escape_html(&key),
-                    escape_html(&preview)
-                )
-            };
-            let _ = bot
-                .edit_message_text(chat_id, msg_id, text)
-                .parse_mode(ParseMode::Html)
-                .await;
-        })
-    });
+    let on_progress: crate::claude::types::ProgressCallback =
+        Box::new(move |lines: Vec<String>| {
+            let bot = bot_progress.clone();
+            let chat_id = chat_id_progress;
+            let msg_id = msg_id_progress;
+            let key = key_progress.clone();
+            let preview = lines.join("").chars().take(200).collect::<String>();
+            Box::pin(async move {
+                let text = if preview.is_empty() {
+                    format!("Analyzing <b>{}</b> with Claude...", escape_html(&key))
+                } else {
+                    format!(
+                        "Analyzing <b>{}</b>...\n\n<pre>{}</pre>",
+                        escape_html(&key),
+                        escape_html(&preview)
+                    )
+                };
+                let _ = bot
+                    .edit_message_text(chat_id, msg_id, text)
+                    .parse_mode(ParseMode::Html)
+                    .await;
+            })
+        });
 
     let opts = AskOptions {
         on_progress: Some(on_progress),
@@ -144,10 +145,9 @@ pub async fn solve_by_key(
     );
     match state.jira.add_comment(issue_key, &analysis).await {
         Ok(()) => {
-            state.logger.info(
-                "solve: comment posted",
-                Some(&json!({ "key": issue_key })),
-            );
+            state
+                .logger
+                .info("solve: comment posted", Some(&json!({ "key": issue_key })));
         }
         Err(e) => {
             state.logger.warn(
@@ -166,11 +166,7 @@ pub async fn handle_repo_picker(
     state: Arc<AppState>,
     issue_key: &str,
 ) -> Result<()> {
-    let project_key = issue_key
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .to_uppercase();
+    let project_key = issue_key.split('-').next().unwrap_or("").to_uppercase();
 
     let repos = state.git_map.get(&project_key).cloned().unwrap_or_default();
 
@@ -240,11 +236,7 @@ pub async fn handle_repo_picker(
     Ok(())
 }
 
-pub async fn handle_branch_picker(
-    bot: Bot,
-    chat_id: ChatId,
-    state: Arc<AppState>,
-) -> Result<()> {
+pub async fn handle_branch_picker(bot: Bot, chat_id: ChatId, state: Arc<AppState>) -> Result<()> {
     let pending = {
         state
             .chat_states
@@ -255,7 +247,8 @@ pub async fn handle_branch_picker(
     let (issue_key, git) = match pending {
         Some(p) => (p.issue_key, p.git),
         None => {
-            bot.send_message(chat_id, "No pending solve action.").await?;
+            bot.send_message(chat_id, "No pending solve action.")
+                .await?;
             return Ok(());
         }
     };
@@ -361,8 +354,7 @@ pub async fn handle_branch_choice(
                         .await?;
                     return Ok(());
                 }
-                let branch_name =
-                    format!("devm8/{}", issue_key.to_lowercase().replace('/', "-"));
+                let branch_name = format!("devm8/{}", issue_key.to_lowercase().replace('/', "-"));
                 state.logger.info(
                     "solve: creating branch",
                     Some(&json!({ "key": issue_key, "branch": &branch_name })),
@@ -397,8 +389,7 @@ pub async fn handle_branch_choice(
                 .await?;
             }
             "new" => {
-                let branch_name =
-                    format!("devm8/{}", issue_key.to_lowercase().replace('/', "-"));
+                let branch_name = format!("devm8/{}", issue_key.to_lowercase().replace('/', "-"));
                 state.logger.info(
                     "solve: creating new branch",
                     Some(&json!({ "key": issue_key, "branch": &branch_name })),
@@ -456,11 +447,7 @@ pub async fn handle_solve(
         return Ok(());
     }
 
-    let project_key = issue_key
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .to_uppercase();
+    let project_key = issue_key.split('-').next().unwrap_or("").to_uppercase();
 
     let has_repos = state.git_map.contains_key(&project_key);
 
@@ -496,11 +483,7 @@ pub async fn handle_solve_repo_callback(
         None => return Ok(()),
     };
 
-    let project_key = issue_key
-        .split('-')
-        .next()
-        .unwrap_or("")
-        .to_uppercase();
+    let project_key = issue_key.split('-').next().unwrap_or("").to_uppercase();
 
     let repos = state.git_map.get(&project_key).cloned().unwrap_or_default();
     let git = repos.get(repo_idx).cloned();

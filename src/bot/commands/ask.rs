@@ -25,7 +25,11 @@ fn build_prompt(question: &str, history: &[HistoryEntry], context: Option<&str>)
     let turns = history
         .iter()
         .map(|e| {
-            let role = if e.role == Role::User { "User" } else { "Assistant" };
+            let role = if e.role == Role::User {
+                "User"
+            } else {
+                "Assistant"
+            };
             format!("{}: {}", role, e.content)
         })
         .collect::<Vec<_>>()
@@ -47,7 +51,10 @@ async fn send_repo_ready_message(
     repo_name: &str,
     git: &Arc<crate::git::GitClient>,
 ) -> Result<()> {
-    let branch = git.current_branch().await.unwrap_or_else(|_| "unknown".into());
+    let branch = git
+        .current_branch()
+        .await
+        .unwrap_or_else(|_| "unknown".into());
     let clean = git.is_clean().await.unwrap_or(true);
     let status_icon = if clean { "✅ clean" } else { "⚠️ dirty" };
 
@@ -59,9 +66,10 @@ async fn send_repo_ready_message(
         status_icon,
     );
 
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback("Pull latest", "ask:pull_latest"),
-    ]]);
+    let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        "Pull latest",
+        "ask:pull_latest",
+    )]]);
 
     bot.send_message(chat_id, text)
         .parse_mode(ParseMode::Html)
@@ -144,24 +152,25 @@ pub async fn ask_with_session(
     let chat_id_cb = chat_id;
     let msg_id_cb = status_msg_id;
 
-    let on_progress: crate::claude::types::ProgressCallback = Box::new(move |lines: Vec<String>| {
-        let bot = bot_cb.clone();
-        let chat_id = chat_id_cb;
-        let msg_id = msg_id_cb;
-        let preview = lines.join("").chars().take(300).collect::<String>();
-        Box::pin(async move {
-            if !preview.is_empty() {
-                let _ = bot
-                    .edit_message_text(
-                        chat_id,
-                        msg_id,
-                        format!("<pre>{}</pre>", escape_html(&preview)),
-                    )
-                    .parse_mode(ParseMode::Html)
-                    .await;
-            }
-        })
-    });
+    let on_progress: crate::claude::types::ProgressCallback =
+        Box::new(move |lines: Vec<String>| {
+            let bot = bot_cb.clone();
+            let chat_id = chat_id_cb;
+            let msg_id = msg_id_cb;
+            let preview = lines.join("").chars().take(300).collect::<String>();
+            Box::pin(async move {
+                if !preview.is_empty() {
+                    let _ = bot
+                        .edit_message_text(
+                            chat_id,
+                            msg_id,
+                            format!("<pre>{}</pre>", escape_html(&preview)),
+                        )
+                        .parse_mode(ParseMode::Html)
+                        .await;
+                }
+            })
+        });
 
     let cwd = repo_path_opt
         .as_ref()
@@ -176,10 +185,7 @@ pub async fn ask_with_session(
     let answer = match state.claude.ask(&prompt, opts).await {
         Ok(a) => a,
         Err(e) => {
-            state.logger.error(
-                &format!("ask: Claude error: {e}"),
-                None,
-            );
+            state.logger.error(&format!("ask: Claude error: {e}"), None);
             bot.edit_message_text(chat_id, status_msg_id, format!("Error: {e}"))
                 .await?;
             return Ok(());
@@ -233,12 +239,7 @@ pub async fn ask_with_session(
 // Main command handler
 // ---------------------------------------------------------------------------
 
-pub async fn handle_ask(
-    bot: Bot,
-    msg: Message,
-    state: Arc<AppState>,
-    args: String,
-) -> Result<()> {
+pub async fn handle_ask(bot: Bot, msg: Message, state: Arc<AppState>, args: String) -> Result<()> {
     let question = args.trim().to_string();
 
     // Collect available repos
@@ -258,7 +259,11 @@ pub async fn handle_ask(
         let pending = PendingAsk {
             repo_path: None,
             git: None,
-            inline_question: if question.is_empty() { None } else { Some(question.clone()) },
+            inline_question: if question.is_empty() {
+                None
+            } else {
+                Some(question.clone())
+            },
             mode: None,
         };
         if question.is_empty() {
@@ -302,8 +307,11 @@ pub async fn handle_ask(
             if let Some(ref g) = git {
                 send_repo_ready_message(&bot, msg.chat.id, project_key, repo_name, g).await?;
             } else {
-                bot.send_message(msg.chat.id, "What would you like to ask Claude about this repository?")
-                    .await?;
+                bot.send_message(
+                    msg.chat.id,
+                    "What would you like to ask Claude about this repository?",
+                )
+                .await?;
             }
             return Ok(());
         }
@@ -335,7 +343,11 @@ pub async fn handle_ask(
     let pending = PendingAsk {
         repo_path: None,
         git: None,
-        inline_question: if question.is_empty() { None } else { Some(question.clone()) },
+        inline_question: if question.is_empty() {
+            None
+        } else {
+            Some(question.clone())
+        },
         mode: None,
     };
     {
@@ -355,11 +367,7 @@ pub async fn handle_ask(
 // Handle free-text input for pending ask states
 // ---------------------------------------------------------------------------
 
-pub async fn handle_ask_text_input(
-    bot: Bot,
-    msg: Message,
-    state: Arc<AppState>,
-) -> Result<()> {
+pub async fn handle_ask_text_input(bot: Bot, msg: Message, state: Arc<AppState>) -> Result<()> {
     let text = msg.text().unwrap_or("").trim().to_string();
 
     let pending = {
@@ -384,19 +392,23 @@ pub async fn handle_ask_text_input(
             });
 
             if let Some(git) = git {
-                state.logger.info(
-                    "ask: creating branch",
-                    Some(&json!({ "branch": &text })),
-                );
-                match git.checkout_new_branch_from_main(&text, "origin", "main").await {
+                state
+                    .logger
+                    .info("ask: creating branch", Some(&json!({ "branch": &text })));
+                match git
+                    .checkout_new_branch_from_main(&text, "origin", "main")
+                    .await
+                {
                     Ok(()) => {
-                        state.logger.info(
-                            "ask: branch created",
-                            Some(&json!({ "branch": &text })),
-                        );
+                        state
+                            .logger
+                            .info("ask: branch created", Some(&json!({ "branch": &text })));
                         bot.send_message(
                             msg.chat.id,
-                            format!("Created and switched to branch <b>{}</b>", escape_html(&text)),
+                            format!(
+                                "Created and switched to branch <b>{}</b>",
+                                escape_html(&text)
+                            ),
                         )
                         .parse_mode(ParseMode::Html)
                         .await?;
@@ -427,17 +439,15 @@ pub async fn handle_ask_text_input(
             });
 
             if let Some(git) = git {
-                state.logger.info(
-                    "ask: committing",
-                    Some(&json!({ "message": &text })),
-                );
+                state
+                    .logger
+                    .info("ask: committing", Some(&json!({ "message": &text })));
                 let _ = git.stage_all().await;
                 match git.commit(&text).await {
                     Ok(()) => {
-                        state.logger.info(
-                            "ask: commit complete",
-                            Some(&json!({ "message": &text })),
-                        );
+                        state
+                            .logger
+                            .info("ask: commit complete", Some(&json!({ "message": &text })));
                         bot.send_message(
                             msg.chat.id,
                             format!("Committed with message: <b>{}</b>", escape_html(&text)),
@@ -446,10 +456,9 @@ pub async fn handle_ask_text_input(
                         .await?;
                     }
                     Err(e) => {
-                        state.logger.error(
-                            &format!("ask: commit failed: {e}"),
-                            None,
-                        );
+                        state
+                            .logger
+                            .error(&format!("ask: commit failed: {e}"), None);
                         bot.send_message(msg.chat.id, format!("Commit failed: {e}"))
                             .await?;
                     }
@@ -473,8 +482,10 @@ pub async fn handle_ask_text_input(
 
                 // Ensure session exists with repo context
                 if entry.ask_session.is_none() {
-                    entry.ask_session =
-                        Some(AskSession::new(pending.repo_path.clone(), pending.git.clone()));
+                    entry.ask_session = Some(AskSession::new(
+                        pending.repo_path.clone(),
+                        pending.git.clone(),
+                    ));
                 }
             }
 
@@ -504,18 +515,25 @@ pub async fn handle_ask_session_callback(
 
     // Handle repo selection: ask:repo:<index>
     if data.starts_with("ask:repo:") {
-        let idx: usize = data
-            .trim_start_matches("ask:repo:")
-            .parse()
-            .unwrap_or(0);
+        let idx: usize = data.trim_start_matches("ask:repo:").parse().unwrap_or(0);
 
-        let all_repos: Vec<(String, std::path::PathBuf, Option<Arc<crate::git::GitClient>>)> = state
+        let all_repos: Vec<(
+            String,
+            std::path::PathBuf,
+            Option<Arc<crate::git::GitClient>>,
+        )> = state
             .git_map
             .iter()
             .flat_map(|(project_key, repos)| {
                 repos
                     .iter()
-                    .map(|g| (project_key.clone(), g.repo_path.clone(), Some(Arc::clone(g))))
+                    .map(|g| {
+                        (
+                            project_key.clone(),
+                            g.repo_path.clone(),
+                            Some(Arc::clone(g)),
+                        )
+                    })
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -529,10 +547,11 @@ pub async fn handle_ask_session_callback(
         };
 
         let question = {
-            state
-                .chat_states
-                .get(&chat_id.0)
-                .and_then(|cs| cs.pending_ask.as_ref().and_then(|p| p.inline_question.clone()))
+            state.chat_states.get(&chat_id.0).and_then(|cs| {
+                cs.pending_ask
+                    .as_ref()
+                    .and_then(|p| p.inline_question.clone())
+            })
         };
 
         {
@@ -551,7 +570,8 @@ pub async fn handle_ask_session_callback(
             if let Some(ref g) = git {
                 send_repo_ready_message(&bot, chat_id, &project_key, repo_name, g).await?;
             } else {
-                bot.send_message(chat_id, "What would you like to ask?").await?;
+                bot.send_message(chat_id, "What would you like to ask?")
+                    .await?;
             }
         }
 
@@ -583,12 +603,16 @@ pub async fn handle_ask_session_callback(
                             .await?;
                     }
                     Err(e) => {
-                        bot.send_message(chat_id, format!("Pull failed: {e}\n\nType your question:"))
-                            .await?;
+                        bot.send_message(
+                            chat_id,
+                            format!("Pull failed: {e}\n\nType your question:"),
+                        )
+                        .await?;
                     }
                 }
             } else {
-                bot.send_message(chat_id, "No git context. Type your question:").await?;
+                bot.send_message(chat_id, "No git context. Type your question:")
+                    .await?;
             }
         }
 
@@ -626,12 +650,10 @@ pub async fn handle_ask_session_callback(
                 let is_clean = g.is_clean().await.unwrap_or(true);
                 if !is_clean {
                     // Ask to stash or keep
-                    let keyboard = InlineKeyboardMarkup::new(vec![
-                        vec![
-                            InlineKeyboardButton::callback("Stash first", "ask:branch_stash"),
-                            InlineKeyboardButton::callback("Keep changes", "ask:branch_keep"),
-                        ],
-                    ]);
+                    let keyboard = InlineKeyboardMarkup::new(vec![vec![
+                        InlineKeyboardButton::callback("Stash first", "ask:branch_stash"),
+                        InlineKeyboardButton::callback("Keep changes", "ask:branch_keep"),
+                    ]]);
                     bot.send_message(chat_id, "Working tree is dirty. Stash or keep changes?")
                         .reply_markup(keyboard)
                         .await?;
@@ -654,7 +676,8 @@ pub async fn handle_ask_session_callback(
                 let mut entry = state.chat_states.entry(chat_id.0).or_default();
                 entry.pending_ask = Some(pending);
             }
-            bot.send_message(chat_id, "Enter the new branch name:").await?;
+            bot.send_message(chat_id, "Enter the new branch name:")
+                .await?;
         }
 
         "branch_stash" => {
@@ -710,7 +733,8 @@ pub async fn handle_ask_session_callback(
                 let mut entry = state.chat_states.entry(chat_id.0).or_default();
                 entry.pending_ask = Some(pending);
             }
-            bot.send_message(chat_id, "Enter the new branch name:").await?;
+            bot.send_message(chat_id, "Enter the new branch name:")
+                .await?;
         }
 
         "commit" => {
@@ -723,7 +747,8 @@ pub async fn handle_ask_session_callback(
             if let Some(ref g) = git {
                 let diff = g.get_diff_stat().await.unwrap_or_default();
                 if diff.is_empty() {
-                    bot.send_message(chat_id, "No staged changes to commit.").await?;
+                    bot.send_message(chat_id, "No staged changes to commit.")
+                        .await?;
                     return Ok(());
                 }
 
@@ -733,10 +758,17 @@ pub async fn handle_ask_session_callback(
                 );
 
                 let commit_cwd = g.repo_path.to_string_lossy().to_string();
-                let suggestion = state.claude.ask(&prompt, AskOptions {
-                    cwd: Some(commit_cwd),
-                    ..AskOptions::default()
-                }).await.unwrap_or_default();
+                let suggestion = state
+                    .claude
+                    .ask(
+                        &prompt,
+                        AskOptions {
+                            cwd: Some(commit_cwd),
+                            ..AskOptions::default()
+                        },
+                    )
+                    .await
+                    .unwrap_or_default();
 
                 let repo_path = state
                     .chat_states
@@ -766,7 +798,8 @@ pub async fn handle_ask_session_callback(
                     .parse_mode(ParseMode::Html)
                     .await?;
             } else {
-                bot.send_message(chat_id, "No git context available.").await?;
+                bot.send_message(chat_id, "No git context available.")
+                    .await?;
             }
         }
 
@@ -791,10 +824,9 @@ pub async fn handle_ask_session_callback(
                         let branch = git.current_branch().await.unwrap_or_default();
                         let is_main = branch == "main" || branch == "master";
 
-                        state.logger.info(
-                            "ask: push complete",
-                            Some(&json!({ "branch": &branch })),
-                        );
+                        state
+                            .logger
+                            .info("ask: push complete", Some(&json!({ "branch": &branch })));
                         let text = format!("Pushed branch <b>{}</b>.", escape_html(&branch));
                         if !is_main {
                             let keyboard = InlineKeyboardMarkup::new(vec![vec![
@@ -811,11 +843,13 @@ pub async fn handle_ask_session_callback(
                         }
                     }
                     Err(e) => {
-                        bot.send_message(chat_id, format!("Push failed: {e}")).await?;
+                        bot.send_message(chat_id, format!("Push failed: {e}"))
+                            .await?;
                     }
                 }
             } else {
-                bot.send_message(chat_id, "No git context available.").await?;
+                bot.send_message(chat_id, "No git context available.")
+                    .await?;
             }
         }
 
@@ -839,11 +873,13 @@ pub async fn handle_ask_session_callback(
                             .await?;
                     }
                     Err(e) => {
-                        bot.send_message(chat_id, format!("Pull failed: {e}")).await?;
+                        bot.send_message(chat_id, format!("Pull failed: {e}"))
+                            .await?;
                     }
                 }
             } else {
-                bot.send_message(chat_id, "No git context available.").await?;
+                bot.send_message(chat_id, "No git context available.")
+                    .await?;
             }
         }
 
@@ -866,18 +902,17 @@ pub async fn handle_ask_session_callback(
             if let Some(git) = git {
                 match git.create_pr().await {
                     Ok(url) => {
-                        bot.send_message(
-                            chat_id,
-                            format!("PR created: {}", url),
-                        )
-                        .await?;
+                        bot.send_message(chat_id, format!("PR created: {}", url))
+                            .await?;
                     }
                     Err(e) => {
-                        bot.send_message(chat_id, format!("Failed to create PR: {e}")).await?;
+                        bot.send_message(chat_id, format!("Failed to create PR: {e}"))
+                            .await?;
                     }
                 }
             } else {
-                bot.send_message(chat_id, "No git context available.").await?;
+                bot.send_message(chat_id, "No git context available.")
+                    .await?;
             }
         }
 

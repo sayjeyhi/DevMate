@@ -92,13 +92,19 @@ pub fn validate_project_key(v: &str) -> Option<String> {
     if project_key_re().is_match(v) {
         None
     } else {
-        Some(format!("'{v}' is not a valid project key (must match ^[A-Z][A-Z0-9_]+$)"))
+        Some(format!(
+            "'{v}' is not a valid project key (must match ^[A-Z][A-Z0-9_]+$)"
+        ))
     }
 }
 
 /// Validate a comma-separated list of project keys.
 pub fn validate_project_keys(v: &str) -> Option<String> {
-    let keys: Vec<&str> = v.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+    let keys: Vec<&str> = v
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
     if keys.is_empty() {
         return Some("At least one project key is required".to_string());
     }

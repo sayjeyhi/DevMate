@@ -1,10 +1,10 @@
 pub mod rotate;
 
+use chrono::Local;
+use serde_json::{json, Value};
 use std::fs;
 use std::io::Write as IoWrite;
 use std::path::Path;
-use chrono::Local;
-use serde_json::{json, Value};
 
 // ---------------------------------------------------------------------------
 // Log level
@@ -13,8 +13,8 @@ use serde_json::{json, Value};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
     Debug = 0,
-    Info  = 1,
-    Warn  = 2,
+    Info = 1,
+    Warn = 2,
     Error = 3,
 }
 
@@ -22,8 +22,8 @@ impl Level {
     pub fn as_str(self) -> &'static str {
         match self {
             Level::Debug => "debug",
-            Level::Info  => "info",
-            Level::Warn  => "warn",
+            Level::Info => "info",
+            Level::Warn => "warn",
             Level::Error => "error",
         }
     }
@@ -31,8 +31,8 @@ impl Level {
     pub fn label(self) -> &'static str {
         match self {
             Level::Debug => "DEBUG",
-            Level::Info  => "INFO ",
-            Level::Warn  => "WARN ",
+            Level::Info => "INFO ",
+            Level::Warn => "WARN ",
             Level::Error => "ERROR",
         }
     }
@@ -43,10 +43,10 @@ impl std::str::FromStr for Level {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "debug" => Ok(Level::Debug),
-            "info"  => Ok(Level::Info),
-            "warn"  => Ok(Level::Warn),
+            "info" => Ok(Level::Info),
+            "warn" => Ok(Level::Warn),
             "error" => Ok(Level::Error),
-            other   => Err(format!("unknown log level: {other}")),
+            other => Err(format!("unknown log level: {other}")),
         }
     }
 }
@@ -115,7 +115,9 @@ impl FileLogger {
         // Write to stdout
         match self.mode {
             OutputMode::Json => {
-                let _ = std::io::stdout().lock().write_all((json_line.clone() + "\n").as_bytes());
+                let _ = std::io::stdout()
+                    .lock()
+                    .write_all((json_line.clone() + "\n").as_bytes());
             }
             OutputMode::Tty => {
                 let meta_part = meta
@@ -131,10 +133,18 @@ impl FileLogger {
 }
 
 impl Logger for FileLogger {
-    fn info(&self, msg: &str, meta: Option<&Value>) { self.emit(Level::Info, msg, meta); }
-    fn error(&self, msg: &str, meta: Option<&Value>) { self.emit(Level::Error, msg, meta); }
-    fn warn(&self, msg: &str, meta: Option<&Value>) { self.emit(Level::Warn, msg, meta); }
-    fn debug(&self, msg: &str, meta: Option<&Value>) { self.emit(Level::Debug, msg, meta); }
+    fn info(&self, msg: &str, meta: Option<&Value>) {
+        self.emit(Level::Info, msg, meta);
+    }
+    fn error(&self, msg: &str, meta: Option<&Value>) {
+        self.emit(Level::Error, msg, meta);
+    }
+    fn warn(&self, msg: &str, meta: Option<&Value>) {
+        self.emit(Level::Warn, msg, meta);
+    }
+    fn debug(&self, msg: &str, meta: Option<&Value>) {
+        self.emit(Level::Debug, msg, meta);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +184,11 @@ pub fn create_logger(
         path
     });
 
-    FileLogger { min_level: level, mode: effective_mode, log_file_path }
+    FileLogger {
+        min_level: level,
+        mode: effective_mode,
+        log_file_path,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +197,12 @@ pub fn create_logger(
 
 /// Append a single JSON log line to a file, creating parent dirs as needed.
 /// Errors are silently ignored (matches TypeScript behaviour).
-pub fn append_to_log_file(log_file_path: impl AsRef<Path>, level: Level, msg: &str, meta: Option<&Value>) {
+pub fn append_to_log_file(
+    log_file_path: impl AsRef<Path>,
+    level: Level,
+    msg: &str,
+    meta: Option<&Value>,
+) {
     let path = log_file_path.as_ref();
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);

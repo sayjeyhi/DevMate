@@ -92,6 +92,10 @@ mod tests {
 
         assert!(log.exists(), "new empty log should exist");
         assert!(numbered(&log, 1).exists(), "rotated backup .1 should exist");
-        assert_eq!(fs::metadata(&log).unwrap().len(), 0, "new log should be empty");
+        assert_eq!(
+            fs::metadata(&log).unwrap().len(),
+            0,
+            "new log should be empty"
+        );
     }
 }

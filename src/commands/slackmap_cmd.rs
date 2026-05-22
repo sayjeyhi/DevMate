@@ -25,17 +25,14 @@ pub async fn slackmap_command() -> Result<(), AppError> {
     if let Some(ref existing) = config.slack {
         println!("Slack is already configured.");
         let preview_len = 8.min(existing.user_token.len());
-        println!(
-            "  User token: {}…",
-            &existing.user_token[..preview_len]
-        );
+        println!("  User token: {}…", &existing.user_token[..preview_len]);
         println!("  Poll interval: {}ms", existing.poll_interval_ms);
         println!();
 
         // Verify the existing token.
         match slack_auth_test(&existing.user_token).await {
             Ok(identity) => println!("  Connected as: {identity}"),
-            Err(e)       => println!("  Warning: token validation failed: {e}"),
+            Err(e) => println!("  Warning: token validation failed: {e}"),
         }
         println!();
     }
@@ -62,9 +59,7 @@ pub async fn slackmap_command() -> Result<(), AppError> {
             }
         })
         .prompt()
-        .map_err(|e| {
-            AppError::Friendly(FriendlyError::new(format!("Prompt failed: {e}")))
-        })?;
+        .map_err(|e| AppError::Friendly(FriendlyError::new(format!("Prompt failed: {e}"))))?;
 
     // ------------------------------------------------------------------
     // Validate the token via auth.test.
@@ -96,9 +91,7 @@ pub async fn slackmap_command() -> Result<(), AppError> {
             )),
         })
         .prompt()
-        .map_err(|e| {
-            AppError::Friendly(FriendlyError::new(format!("Prompt failed: {e}")))
-        })?;
+        .map_err(|e| AppError::Friendly(FriendlyError::new(format!("Prompt failed: {e}"))))?;
 
     let poll_interval_ms = interval_raw.trim().parse::<u64>().unwrap_or(30) * 1000;
 

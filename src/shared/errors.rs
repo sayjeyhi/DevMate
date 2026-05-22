@@ -12,11 +12,17 @@ pub struct FriendlyError {
 
 impl FriendlyError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into(), hint: None }
+        Self {
+            message: message.into(),
+            hint: None,
+        }
     }
 
     pub fn with_hint(message: impl Into<String>, hint: impl Into<String>) -> Self {
-        Self { message: message.into(), hint: Some(hint.into()) }
+        Self {
+            message: message.into(),
+            hint: Some(hint.into()),
+        }
     }
 }
 
@@ -44,7 +50,9 @@ pub struct ConfigMissingError {
 
 impl ConfigMissingError {
     pub fn new(config_path: impl Into<String>) -> Self {
-        Self { config_path: config_path.into() }
+        Self {
+            config_path: config_path.into(),
+        }
     }
 }
 
@@ -61,7 +69,10 @@ pub struct LaunchctlError {
 
 impl LaunchctlError {
     pub fn new(stderr: impl Into<String>, hint: impl Into<String>) -> Self {
-        Self { raw_output: stderr.into(), hint: hint.into() }
+        Self {
+            raw_output: stderr.into(),
+            hint: hint.into(),
+        }
     }
 }
 
@@ -118,7 +129,10 @@ pub struct InvalidTransitionError {
 
 impl InvalidTransitionError {
     pub fn new(attempted: impl Into<String>, available: Vec<String>) -> Self {
-        Self { attempted: attempted.into(), available }
+        Self {
+            attempted: attempted.into(),
+            available,
+        }
     }
 }
 

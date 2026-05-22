@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::path::PathBuf;
 use anyhow::Result;
+use std::path::PathBuf;
 use tokio::process::Command;
 
 /// Raw output of a git subcommand execution.
@@ -20,7 +20,9 @@ pub struct GitClient {
 
 impl GitClient {
     pub fn new(repo_path: impl Into<PathBuf>) -> Self {
-        Self { repo_path: repo_path.into() }
+        Self {
+            repo_path: repo_path.into(),
+        }
     }
 
     /// Execute a git command and return the full output (stdout + stderr + exit code).
@@ -73,14 +75,16 @@ impl GitClient {
     ) -> Result<()> {
         let _ = self.run(&["fetch", remote, base]).await;
         let start_point = format!("{}/{}", remote, base);
-        self.run(&["checkout", "-b", branch_name, &start_point]).await?;
+        self.run(&["checkout", "-b", branch_name, &start_point])
+            .await?;
         Ok(())
     }
 
     /// Stash all changes (including untracked files), with an optional message.
     pub async fn stash(&self, message: Option<&str>) -> Result<()> {
         if let Some(msg) = message {
-            self.run(&["stash", "push", "--include-untracked", "-m", msg]).await?;
+            self.run(&["stash", "push", "--include-untracked", "-m", msg])
+                .await?;
         } else {
             self.run(&["stash", "push", "--include-untracked"]).await?;
         }
@@ -119,7 +123,8 @@ impl GitClient {
     /// Push the current branch and set the upstream.
     pub async fn push(&self, remote: &str) -> Result<()> {
         let branch = self.current_branch().await?;
-        self.run(&["push", "--set-upstream", remote, &branch]).await?;
+        self.run(&["push", "--set-upstream", remote, &branch])
+            .await?;
         Ok(())
     }
 
@@ -133,7 +138,9 @@ impl GitClient {
             .await?;
 
         if create_output.status.success() {
-            return Ok(String::from_utf8_lossy(&create_output.stdout).trim().to_string());
+            return Ok(String::from_utf8_lossy(&create_output.stdout)
+                .trim()
+                .to_string());
         }
 
         // Fallback: view the existing PR URL.
@@ -144,10 +151,14 @@ impl GitClient {
             .await?;
 
         if view_output.status.success() {
-            return Ok(String::from_utf8_lossy(&view_output.stdout).trim().to_string());
+            return Ok(String::from_utf8_lossy(&view_output.stdout)
+                .trim()
+                .to_string());
         }
 
-        let stderr = String::from_utf8_lossy(&create_output.stderr).trim().to_string();
+        let stderr = String::from_utf8_lossy(&create_output.stderr)
+            .trim()
+            .to_string();
         anyhow::bail!("gh pr create failed: {}", stderr)
     }
 }

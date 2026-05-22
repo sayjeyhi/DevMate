@@ -59,14 +59,14 @@ async fn main() {
 
     let result: Result<(), Box<dyn std::error::Error>> = async {
         match cli.command {
-            Cmd::Daemon      => commands::daemon_command().await?,
-            Cmd::Start       => commands::start_command().await?,
-            Cmd::Stop        => commands::stop_command().await?,
-            Cmd::Status      => commands::status_command().await?,
+            Cmd::Daemon => commands::daemon_command().await?,
+            Cmd::Start => commands::start_command().await?,
+            Cmd::Stop => commands::stop_command().await?,
+            Cmd::Status => commands::status_command().await?,
             Cmd::Logs { tail, follow } => commands::logs_command(tail, follow).await?,
-            Cmd::Config      => commands::config_command().await?,
-            Cmd::Update      => commands::update_command().await?,
-            Cmd::Slackmap    => commands::slackmap_command().await?,
+            Cmd::Config => commands::config_command().await?,
+            Cmd::Update => commands::update_command().await?,
+            Cmd::Slackmap => commands::slackmap_command().await?,
         }
         Ok(())
     }

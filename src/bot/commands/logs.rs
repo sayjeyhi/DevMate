@@ -3,11 +3,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use teloxide::prelude::*;
 use teloxide::types::ParseMode;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::fs::File;
+use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::bot::AppState;
 use crate::bot::utils::escape_html;
+use crate::bot::AppState;
 use crate::shared::PATHS;
 
 const DEFAULT_LINES: usize = 50;
@@ -80,7 +80,8 @@ pub async fn handle_logs(
     let file = match File::open(log_path).await {
         Ok(f) => f,
         Err(_) => {
-            bot.send_message(msg.chat.id, "Log file not found or not accessible.").await?;
+            bot.send_message(msg.chat.id, "Log file not found or not accessible.")
+                .await?;
             return Ok(());
         }
     };
@@ -117,9 +118,7 @@ pub async fn handle_logs(
 
         // Try to split on newline boundary
         let split_at = if chunk_len < remaining.len() {
-            remaining[..chunk_len]
-                .rfind('\n')
-                .unwrap_or(chunk_len)
+            remaining[..chunk_len].rfind('\n').unwrap_or(chunk_len)
         } else {
             chunk_len
         };
@@ -127,12 +126,9 @@ pub async fn handle_logs(
         let chunk = &remaining[..split_at];
         remaining = remaining[split_at..].trim_start_matches('\n');
 
-        bot.send_message(
-            msg.chat.id,
-            format!("<pre>{}</pre>", escape_html(chunk)),
-        )
-        .parse_mode(ParseMode::Html)
-        .await?;
+        bot.send_message(msg.chat.id, format!("<pre>{}</pre>", escape_html(chunk)))
+            .parse_mode(ParseMode::Html)
+            .await?;
     }
 
     Ok(())

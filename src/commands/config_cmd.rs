@@ -1,6 +1,6 @@
 use crate::config::loader::{load_config, write_config};
 use crate::config::wizard::run_wizard;
-use crate::logger::{Level, append_to_log_file};
+use crate::logger::{append_to_log_file, Level};
 use crate::shared::errors::AppError;
 use crate::shared::paths::PATHS;
 

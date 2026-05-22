@@ -35,9 +35,9 @@ fn colored_level(level: &str, color: bool) -> String {
     }
     match level {
         "error" => ansi_wrap("31", &upper),
-        "warn"  => ansi_wrap("33", &upper),
-        "debug" => ansi_wrap("2",  &upper),
-        _       => ansi_wrap("36", &upper), // cyan for info
+        "warn" => ansi_wrap("33", &upper),
+        "debug" => ansi_wrap("2", &upper),
+        _ => ansi_wrap("36", &upper), // cyan for info
     }
 }
 
@@ -84,12 +84,12 @@ fn format_line(raw: &str, color: bool) -> String {
     };
 
     let level = v.get("level").and_then(|l| l.as_str()).unwrap_or("info");
-    let msg   = v.get("msg").and_then(|m| m.as_str()).unwrap_or(trimmed);
-    let ts    = v.get("ts").and_then(|t| t.as_str()).unwrap_or("");
+    let msg = v.get("msg").and_then(|m| m.as_str()).unwrap_or(trimmed);
+    let ts = v.get("ts").and_then(|t| t.as_str()).unwrap_or("");
 
-    let time_part    = parse_time_part(ts);
-    let level_str    = colored_level(level, color);
-    let meta         = build_meta_str(&v);
+    let time_part = parse_time_part(ts);
+    let level_str = colored_level(level, color);
+    let meta = build_meta_str(&v);
 
     if meta.is_empty() {
         format!("{} [{}] {}", time_part, level_str, msg)
@@ -149,9 +149,7 @@ pub async fn logs_command(tail: u32, follow: bool) -> Result<(), AppError> {
             continue;
         }
 
-        let new_size = std::fs::metadata(log_file)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let new_size = std::fs::metadata(log_file).map(|m| m.len()).unwrap_or(0);
 
         if new_size < file_size {
             // File was rotated — reset position.
