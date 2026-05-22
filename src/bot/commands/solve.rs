@@ -189,12 +189,16 @@ pub async fn handle_repo_picker(
                 git: Some(Arc::clone(&repos[0])),
             });
         } else {
-            let mut cs = ChatState::default();
-            cs.pending_solve = Some(PendingSolve {
-                issue_key: issue_key.to_string(),
-                git: Some(Arc::clone(&repos[0])),
-            });
-            state.chat_states.insert(chat_id.0, cs);
+            state.chat_states.insert(
+                chat_id.0,
+                ChatState {
+                    pending_solve: Some(PendingSolve {
+                        issue_key: issue_key.to_string(),
+                        git: Some(Arc::clone(&repos[0])),
+                    }),
+                    ..Default::default()
+                },
+            );
         }
         return handle_branch_picker(bot, chat_id, state).await;
     }
@@ -417,7 +421,7 @@ pub async fn handle_branch_choice(
                 .parse_mode(ParseMode::Html)
                 .await?;
             }
-            "curr" | _ => {
+            _ => {
                 state.logger.info(
                     "solve: staying on current branch",
                     Some(&json!({ "key": issue_key })),

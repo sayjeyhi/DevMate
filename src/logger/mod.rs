@@ -153,9 +153,8 @@ impl Logger for FileLogger {
 
 /// Create a logger.
 ///
-/// - `level`         — minimum level to emit (e.g. `Level::Info`)
-/// - `mode`          — `Some(OutputMode::Json)` / `Some(OutputMode::Tty)` or
-///                     `None` to auto-detect from whether stdout is a TTY.
+/// - `level` — minimum level to emit (e.g. `Level::Info`)
+/// - `mode` — `Some(OutputMode::Json)` / `Some(OutputMode::Tty)` or `None` to auto-detect from whether stdout is a TTY.
 /// - `log_file_path` — optional path; the directory is created if needed.
 pub fn create_logger(
     level: Level,

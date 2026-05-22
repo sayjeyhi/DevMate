@@ -17,6 +17,7 @@ pub struct ClaudeClientConfig {
 pub type ProgressCallback =
     Box<dyn Fn(Vec<String>) -> Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 
+#[derive(Default)]
 pub struct AskOptions {
     /// Override the client-level timeout for this call.
     pub timeout_ms: Option<u64>,
@@ -39,16 +40,5 @@ impl std::fmt::Debug for AskOptions {
             )
             .field("cwd", &self.cwd)
             .finish()
-    }
-}
-
-impl Default for AskOptions {
-    fn default() -> Self {
-        Self {
-            timeout_ms: None,
-            model: None,
-            on_progress: None,
-            cwd: None,
-        }
     }
 }

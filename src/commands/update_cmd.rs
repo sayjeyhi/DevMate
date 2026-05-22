@@ -41,7 +41,7 @@ async fn fetch_latest_version(repo: &str) -> anyhow::Result<String> {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
-        let tag = location.split('/').last().unwrap_or("").to_string();
+        let tag = location.split('/').next_back().unwrap_or("").to_string();
         if tag.starts_with('v') {
             return Ok(tag);
         }
@@ -123,9 +123,7 @@ pub async fn update_command() -> Result<(), AppError> {
     // Fetch the latest tag from GitHub.
     // ------------------------------------------------------------------
     println!("Checking for updates…");
-    let latest = fetch_latest_version(REPO)
-        .await
-        .map_err(|e| AppError::Other(e))?;
+    let latest = fetch_latest_version(REPO).await.map_err(AppError::Other)?;
 
     if !is_newer(&latest, CURRENT_VERSION) {
         println!("Already up to date ({})", CURRENT_VERSION);
@@ -176,7 +174,7 @@ pub async fn update_command() -> Result<(), AppError> {
     // ------------------------------------------------------------------
     verify_sha256(&bin_bytes, &checksums, bin_name)
         .await
-        .map_err(|e| AppError::Other(e))?;
+        .map_err(AppError::Other)?;
 
     println!("Checksum verified.");
 
@@ -200,7 +198,7 @@ pub async fn update_command() -> Result<(), AppError> {
     // Overwrite the current binary atomically.
     // ------------------------------------------------------------------
     let exe_path = std::env::current_exe()
-        .and_then(|p| std::fs::canonicalize(p))
+        .and_then(std::fs::canonicalize)
         .map_err(|e| {
             AppError::Friendly(FriendlyError::with_hint(
                 format!("Cannot determine current executable path: {e}"),

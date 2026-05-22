@@ -106,7 +106,7 @@ fn format_line(raw: &str, color: bool) -> String {
 fn read_last_n_lines(path: &Path, n: usize) -> std::io::Result<Vec<String>> {
     let file = std::fs::File::open(path)?;
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+    let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
     let start = lines.len().saturating_sub(n);
     Ok(lines[start..].to_vec())
 }
@@ -137,10 +137,11 @@ pub async fn logs_command(tail: u32, follow: bool) -> Result<(), AppError> {
     // ------------------------------------------------------------------
     // Follow mode: poll for new content every 300ms.
     // ------------------------------------------------------------------
-    let mut file_size: u64 = log_file
-        .exists()
-        .then(|| std::fs::metadata(log_file).map(|m| m.len()).unwrap_or(0))
-        .unwrap_or(0);
+    let mut file_size: u64 = if log_file.exists() {
+        std::fs::metadata(log_file).map(|m| m.len()).unwrap_or(0)
+    } else {
+        0
+    };
 
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
