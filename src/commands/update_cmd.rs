@@ -2,8 +2,8 @@ use std::io::Write as _;
 
 use sha2::{Digest, Sha256};
 
-#[cfg(target_os = "macos")]
-use crate::daemon::launchd::{agent_status, load_agent, unload_agent};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use crate::daemon::{agent_status, load_agent, unload_agent};
 use crate::shared::errors::{AppError, FriendlyError};
 
 const REPO: &str = "sayjeyhi/DevM8";
@@ -179,9 +179,9 @@ pub async fn update_command() -> Result<(), AppError> {
     println!("Checksum verified.");
 
     // ------------------------------------------------------------------
-    // Stop the service if it is running on macOS.
+    // Stop the service if it is running.
     // ------------------------------------------------------------------
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     let was_running = {
         let s = agent_status().await;
         if s.running {
@@ -233,7 +233,7 @@ pub async fn update_command() -> Result<(), AppError> {
     // ------------------------------------------------------------------
     // Restart the service if it was running.
     // ------------------------------------------------------------------
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     if was_running {
         println!("Restarting daemon…");
         let _ = load_agent().await;

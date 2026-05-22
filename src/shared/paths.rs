@@ -11,8 +11,10 @@ pub struct Paths {
     pub logs_dir: PathBuf,
     pub log_file: PathBuf,
     pub pid_file: PathBuf,
-    pub plist_file: PathBuf,
-    pub launch_agents_dir: PathBuf,
+    /// Platform-specific service unit file (launchd plist on macOS, systemd .service on Linux).
+    pub service_file: PathBuf,
+    /// Directory that contains the service unit file.
+    pub service_dir: PathBuf,
 }
 
 impl Paths {
@@ -22,7 +24,21 @@ impl Paths {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
         let config_dir = home.join(".config/devm8");
         let logs_dir = config_dir.join("logs");
-        let launch_agents_dir = home.join("Library/LaunchAgents");
+
+        #[cfg(target_os = "macos")]
+        let service_dir = home.join("Library/LaunchAgents");
+        #[cfg(target_os = "macos")]
+        let service_file = service_dir.join("net.devm8.plist");
+
+        #[cfg(target_os = "linux")]
+        let service_dir = home.join(".config/systemd/user");
+        #[cfg(target_os = "linux")]
+        let service_file = service_dir.join("devm8.service");
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        let service_dir = config_dir.clone();
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        let service_file = config_dir.join("devm8.service");
 
         Self {
             config_file: config_dir.join("config.toml"),
@@ -30,10 +46,10 @@ impl Paths {
             slack_state_file: config_dir.join("slack-state.json"),
             log_file: logs_dir.join("app.log"),
             pid_file: config_dir.join("daemon.pid"),
-            plist_file: launch_agents_dir.join("net.devm8.plist"),
+            service_file,
+            service_dir,
             config_dir,
             logs_dir,
-            launch_agents_dir,
         }
     }
 }
@@ -45,8 +61,4 @@ impl Default for Paths {
 }
 
 /// Global lazy constant — use `PATHS.config_file` etc.
-///
-/// Because `std::sync::OnceLock` is stable since Rust 1.70 we use it here.
-/// The TypeScript `PATHS` object was a module-level constant; this gives the
-/// same ergonomics.
 pub static PATHS: std::sync::LazyLock<Paths> = std::sync::LazyLock::new(Paths::new);

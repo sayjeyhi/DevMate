@@ -1,5 +1,5 @@
-use crate::daemon::launchd::unload_agent;
 use crate::daemon::pid::remove_pid;
+use crate::daemon::unload_agent;
 use crate::logger::{append_to_log_file, Level};
 use crate::shared::errors::AppError;
 use crate::shared::paths::PATHS;

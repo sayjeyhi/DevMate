@@ -47,7 +47,6 @@ pub fn load_config(config_path: Option<&Path>) -> Result<AppConfig, AppError> {
 }
 
 /// Returns `true` if a config file exists at the given path (or the default).
-#[cfg(target_os = "macos")]
 pub fn config_exists(config_path: Option<&Path>) -> bool {
     resolve_path(config_path).exists()
 }

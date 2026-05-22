@@ -23,7 +23,7 @@ enum Cmd {
     /// Run the daemon process (internal — invoked by launchd)
     Daemon,
 
-    /// Start the daemon via launchd (macOS)
+    /// Start the daemon (macOS: launchd, Linux: systemd)
     Start,
 
     /// Stop the daemon

@@ -1,4 +1,3 @@
-#[cfg(target_os = "macos")]
 use std::path::Path;
 use std::process::Command;
 
@@ -20,7 +19,6 @@ pub struct AgentStatus {
 // Environment keys forwarded into the launchd agent
 // ---------------------------------------------------------------------------
 
-#[cfg(target_os = "macos")]
 const FORWARDED_ENV_KEYS: &[&str] = &[
     "HOME",
     "PATH",
@@ -33,7 +31,6 @@ const FORWARDED_ENV_KEYS: &[&str] = &[
 // Plist generation
 // ---------------------------------------------------------------------------
 
-#[cfg(target_os = "macos")]
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -43,7 +40,6 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// Generate a macOS launchd plist XML string for the devm8 daemon.
-#[cfg(target_os = "macos")]
 pub fn generate_plist(binary_path: &str) -> String {
     let env_entries = FORWARDED_ENV_KEYS
         .iter()
@@ -100,13 +96,14 @@ pub fn generate_plist(binary_path: &str) -> String {
 }
 
 /// Write the plist to disk atomically (tmp → rename).
-#[cfg(target_os = "macos")]
-pub async fn write_plist(binary_path: &str, file_path: Option<&Path>) -> Result<(), AppError> {
+pub async fn write_service_file(
+    binary_path: &str,
+    file_path: Option<&Path>,
+) -> Result<(), AppError> {
     let target = file_path
         .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PATHS.plist_file.clone());
+        .unwrap_or_else(|| PATHS.service_file.clone());
 
-    // Ensure parent directory exists.
     if let Some(dir) = target.parent() {
         tokio::fs::create_dir_all(dir).await?;
     }
@@ -146,9 +143,8 @@ fn run_launchctl(args: &[&str]) -> Result<LaunchctlOutput, AppError> {
 }
 
 /// Load the launchd agent (`launchctl load -w <plist>`).
-#[cfg(target_os = "macos")]
 pub async fn load_agent() -> Result<(), AppError> {
-    let plist = PATHS.plist_file.to_string_lossy().into_owned();
+    let plist = PATHS.service_file.to_string_lossy().into_owned();
     let out = run_launchctl(&["load", "-w", &plist])?;
     if out.exit_code != 0 {
         let hint = launchctl_hint(&out.stderr);
@@ -159,7 +155,7 @@ pub async fn load_agent() -> Result<(), AppError> {
 
 /// Unload the launchd agent (`launchctl unload -w <plist>`).
 pub async fn unload_agent() -> Result<(), AppError> {
-    let plist = PATHS.plist_file.to_string_lossy().into_owned();
+    let plist = PATHS.service_file.to_string_lossy().into_owned();
     let out = run_launchctl(&["unload", "-w", &plist])?;
     if out.exit_code != 0 {
         let hint = launchctl_hint(&out.stderr);
@@ -229,7 +225,6 @@ fn parse_list_output(output: &str) -> AgentStatus {
 /// `launchctl list net.devm8`.  Returns `{ running: false }` if neither
 /// yields useful output.
 pub async fn agent_status() -> AgentStatus {
-    // Attempt the richer `print` subcommand first.
     let uid = libc_uid();
     let service = format!("gui/{uid}/net.devm8");
 
@@ -239,7 +234,6 @@ pub async fn agent_status() -> AgentStatus {
         }
     }
 
-    // Fall back to `list`.
     if let Ok(out) = run_launchctl(&["list", "net.devm8"]) {
         if out.exit_code == 0 && !out.stdout.is_empty() {
             return parse_list_output(&out.stdout);
@@ -249,9 +243,8 @@ pub async fn agent_status() -> AgentStatus {
     AgentStatus::default()
 }
 
-/// Get the current user's UID via libc or by parsing `id -u`.
+/// Get the current user's UID via `id -u`.
 fn libc_uid() -> u32 {
-    // Use `id -u` to avoid a libc dependency here.
     Command::new("id")
         .arg("-u")
         .output()

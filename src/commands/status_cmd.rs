@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::config::loader::load_config;
-use crate::daemon::launchd::agent_status;
+use crate::daemon::agent_status;
 use crate::daemon::pid::{is_process_running, read_pid};
 use crate::shared::errors::AppError;
 use crate::shared::paths::PATHS;

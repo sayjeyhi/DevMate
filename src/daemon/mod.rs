@@ -1,12 +1,20 @@
+#[cfg(target_os = "macos")]
 pub mod launchd;
 pub mod pid;
 pub mod restart_tracker;
+#[cfg(target_os = "linux")]
+pub mod systemd;
 
-#[allow(unused_imports)]
-pub use launchd::{agent_status, unload_agent, AgentStatus};
 #[cfg(target_os = "macos")]
 #[allow(unused_imports)]
-pub use launchd::{generate_plist, load_agent, write_plist};
+pub use launchd::{
+    agent_status, generate_plist, load_agent, unload_agent, write_service_file, AgentStatus,
+};
+
+#[cfg(target_os = "linux")]
+#[allow(unused_imports)]
+pub use systemd::{agent_status, load_agent, unload_agent, write_service_file, AgentStatus};
+
 #[allow(unused_imports)]
 pub use pid::{is_process_running, read_pid, remove_pid, write_pid};
 #[allow(unused_imports)]
