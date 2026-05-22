@@ -2,8 +2,8 @@ use std::io::Write as _;
 
 use sha2::{Digest, Sha256};
 
-use crate::daemon::launchd::agent_status;
-use crate::daemon::launchd::{load_agent, unload_agent};
+#[cfg(target_os = "macos")]
+use crate::daemon::launchd::{agent_status, load_agent, unload_agent};
 use crate::shared::errors::{AppError, FriendlyError};
 
 const REPO: &str = "sayjeyhi/DevM8";
