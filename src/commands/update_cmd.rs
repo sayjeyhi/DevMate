@@ -191,9 +191,6 @@ pub async fn update_command() -> Result<(), AppError> {
         s.running
     };
 
-    #[cfg(not(target_os = "macos"))]
-    let was_running = false;
-
     // ------------------------------------------------------------------
     // Overwrite the current binary atomically.
     // ------------------------------------------------------------------

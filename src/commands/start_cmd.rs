@@ -10,16 +10,16 @@ use crate::logger::{append_to_log_file, Level};
 use crate::shared::errors::{AppError, FriendlyError};
 use crate::shared::paths::PATHS;
 
+#[cfg(not(target_os = "macos"))]
 pub async fn start_command() -> Result<(), AppError> {
-    // ------------------------------------------------------------------
-    // macOS only
-    // ------------------------------------------------------------------
-    #[cfg(not(target_os = "macos"))]
-    return Err(AppError::Friendly(FriendlyError::with_hint(
+    Err(AppError::Friendly(FriendlyError::with_hint(
         "DevM8 requires macOS".to_string(),
         "This tool uses launchd, which is only available on macOS.".to_string(),
-    )));
+    )))
+}
 
+#[cfg(target_os = "macos")]
+pub async fn start_command() -> Result<(), AppError> {
     let paths = &*PATHS;
 
     // ------------------------------------------------------------------
