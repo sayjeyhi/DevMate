@@ -10,9 +10,9 @@ use crate::config::schema::AppConfig;
 use crate::logger::Logger;
 
 use super::commands::{
-    handle_ask, handle_ask_session_callback, handle_ask_text_input, handle_comment, handle_create,
-    handle_help, handle_logs, handle_move, handle_my_tickets, handle_my_tickets_callback,
-    handle_pending_comment, handle_solve, handle_solve_repo_callback,
+    ask_with_session, handle_ask, handle_ask_session_callback, handle_ask_text_input,
+    handle_comment, handle_create, handle_help, handle_logs, handle_move, handle_my_tickets,
+    handle_my_tickets_callback, handle_pending_comment, handle_solve, handle_solve_repo_callback,
 };
 use super::handlers::{handle_pending_slack_reply, handle_slack_callback};
 use super::AppState;
@@ -359,14 +359,8 @@ async fn dispatch_message(
         return Ok(());
     }
 
-    // Free text → ask Claude
-    use crate::claude::types::AskOptions;
-    let answer = match state.claude.ask(&text, AskOptions::default()).await {
-        Ok(a) => a,
-        Err(e) => format!("Error: {e}"),
-    };
-
-    bot.send_message(msg.chat.id, answer).await?;
+    // Free text → route through ask session so the active repo cwd is used.
+    ask_with_session(bot, msg.chat.id, state, text).await?;
 
     Ok(())
 }

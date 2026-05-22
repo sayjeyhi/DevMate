@@ -7,7 +7,7 @@ pub mod move_cmd;
 pub mod my_tickets;
 pub mod solve;
 
-pub use ask::{handle_ask, handle_ask_session_callback, handle_ask_text_input};
+pub use ask::{ask_with_session, handle_ask, handle_ask_session_callback, handle_ask_text_input};
 pub use comment::{handle_comment, handle_pending_comment};
 pub use create::handle_create;
 pub use help::handle_help;
