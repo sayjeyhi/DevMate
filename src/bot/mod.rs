@@ -78,7 +78,7 @@ impl AppState {
 
         let claude_cfg = ClaudeClientConfig {
             binary_path: config.claude.binary_path.clone(),
-            timeout_ms: None,
+            timeout_ms: config.claude.timeout_ms,
             model: None,
         };
 

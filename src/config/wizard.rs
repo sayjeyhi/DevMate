@@ -251,6 +251,7 @@ fn collect_claude(existing: Option<&ClaudeConfig>) -> Result<ClaudeConfig, AppEr
     Ok(ClaudeConfig {
         binary_path,
         api_key,
+        timeout_ms: None,
     })
 }
 

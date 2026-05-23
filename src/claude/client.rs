@@ -14,7 +14,7 @@ use crate::shared::errors::{AppError, ClaudeError};
 
 use super::types::{AskOptions, ClaudeClientConfig};
 
-const DEFAULT_TIMEOUT_MS: u64 = 120_000;
+const DEFAULT_TIMEOUT_MS: u64 = 300_000;
 const PROGRESS_INTERVAL_MS: u64 = 2_000;
 const SIGTERM_GRACE_MS: u64 = 2_000;
 

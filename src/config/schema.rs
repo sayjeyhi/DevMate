@@ -37,6 +37,7 @@ pub struct JiraConfig {
 pub struct ClaudeConfig {
     pub binary_path: String,
     pub api_key: Option<String>,
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
