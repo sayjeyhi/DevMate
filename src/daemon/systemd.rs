@@ -18,7 +18,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart={binary}
+ExecStart={binary} daemon
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

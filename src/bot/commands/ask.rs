@@ -146,7 +146,7 @@ pub async fn ask_with_session(
     let status_msg = bot.send_message(chat_id, "Thinking...").await?;
     let status_msg_id = status_msg.id;
 
-    let _typing = keep_typing(bot.clone(), chat_id);
+    let typing = keep_typing(bot.clone(), chat_id);
 
     let bot_cb = bot.clone();
     let chat_id_cb = chat_id;
@@ -185,12 +185,14 @@ pub async fn ask_with_session(
     let answer = match state.claude.ask(&prompt, opts).await {
         Ok(a) => a,
         Err(e) => {
+            typing.abort();
             state.logger.error(&format!("ask: Claude error: {e}"), None);
             bot.edit_message_text(chat_id, status_msg_id, format!("Error: {e}"))
                 .await?;
             return Ok(());
         }
     };
+    typing.abort();
 
     state.logger.info(
         "ask: Claude responded",
