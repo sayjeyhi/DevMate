@@ -74,3 +74,52 @@ pub fn is_process_running(pid: u32) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
+
+/// Find the PIDs of every running `devm8 daemon` process by scanning /proc.
+/// Excludes the calling process.
+#[cfg(target_os = "linux")]
+pub fn find_daemon_pids() -> Vec<u32> {
+    let current = std::process::id();
+    let mut pids = Vec::new();
+
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return pids;
+    };
+
+    for entry in entries.flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() else {
+            continue;
+        };
+        if pid == current {
+            continue;
+        }
+
+        let Ok(data) = std::fs::read(entry.path().join("cmdline")) else {
+            continue;
+        };
+
+        // cmdline is null-terminated argv: "/path/to/devm8\0daemon\0..."
+        let args: Vec<&[u8]> = data.split(|&b| b == 0).collect();
+        let arg0 = std::str::from_utf8(args.first().unwrap_or(&b"")).unwrap_or("");
+        let arg1 = std::str::from_utf8(args.get(1).unwrap_or(&b"")).unwrap_or("");
+
+        if (arg0.ends_with("/devm8") || arg0 == "devm8") && arg1 == "daemon" {
+            pids.push(pid);
+        }
+    }
+
+    pids
+}
+
+/// Send SIGTERM to every running `devm8 daemon` process. Returns number killed.
+#[cfg(target_os = "linux")]
+pub fn kill_all_daemons() -> usize {
+    let pids = find_daemon_pids();
+    let count = pids.len();
+    for pid in pids {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    }
+    count
+}

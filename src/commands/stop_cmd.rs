@@ -7,17 +7,23 @@ use crate::shared::paths::PATHS;
 pub async fn stop_command() -> Result<(), AppError> {
     let paths = &*PATHS;
 
-    // Unload the launchd agent (ignore errors so `stop` is idempotent).
+    // Unload via service manager (systemd/launchd).
     if let Err(e) = unload_agent().await {
-        eprintln!("Warning: could not unload launchd agent: {e}");
+        eprintln!("Warning: could not unload agent: {e}");
     }
 
-    // Remove the PID file.
+    // Safety net: kill any remaining daemon processes missed by the service manager.
+    #[cfg(target_os = "linux")]
+    {
+        let remaining = crate::daemon::kill_all_daemons();
+        if remaining > 0 {
+            println!("Killed {remaining} remaining daemon process(es).");
+        }
+    }
+
     remove_pid(None).await?;
 
-    // Append a log entry.
     append_to_log_file(&paths.log_file, Level::Info, "service stopped", None);
-
     println!("devm8 stopped");
 
     Ok(())
