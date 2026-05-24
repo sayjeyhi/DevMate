@@ -119,16 +119,26 @@ pub fn validate_project_keys(v: &str) -> Option<String> {
 /// Validate that a binary path refers to an existing, executable file.
 pub fn validate_binary_path(v: &str) -> Option<String> {
     let path = std::path::Path::new(v);
-    if !path.is_file() {
+    let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+    if real.is_dir() {
+        return Some(format!(
+            "'{v}' resolves to a directory, not an executable — \
+set claude.binary_path to the actual binary (e.g. '{}/claude')",
+            real.display()
+        ));
+    }
+    if !real.is_file() {
         return Some(format!("Binary not found at '{v}'"));
     }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(path) {
+        if let Ok(meta) = std::fs::metadata(&real) {
             if meta.permissions().mode() & 0o111 == 0 {
                 return Some(format!(
-                    "Binary at '{v}' is not executable — run: chmod +x {v}"
+                    "Binary at '{v}' is not executable — run: chmod +x {real}",
+                    real = real.display()
                 ));
             }
         }

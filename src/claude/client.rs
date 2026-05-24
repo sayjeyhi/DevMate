@@ -258,18 +258,35 @@ impl ClaudeClient {
 fn diagnose_binary(binary: &str) -> String {
     let path = std::path::Path::new(binary);
 
-    if !path.exists() {
+    // Resolve symlinks so we inspect the real target, not the link itself.
+    let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+    if !real.exists() {
         return format!(
-            "binary not found at '{binary}' — run `devm8 config` to set the correct path"
+            "binary not found at '{binary}' (resolved: '{real}') — run `devm8 config` to set the correct path",
+            real = real.display()
+        );
+    }
+
+    // A symlink pointing to a directory looks executable but execve returns EISDIR → EACCES.
+    if real.is_dir() {
+        return format!(
+            "'{binary}' resolves to a directory ('{real}'), not an executable — \
+update claude.binary_path in `devm8 config` to the actual claude binary inside that directory \
+(e.g. '{real}/claude')",
+            real = real.display()
         );
     }
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(meta) = std::fs::metadata(path) {
+        if let Ok(meta) = std::fs::metadata(&real) {
             if meta.permissions().mode() & 0o111 == 0 {
-                return format!("binary at '{binary}' is not executable — run: chmod +x {binary}");
+                return format!(
+                    "binary at '{binary}' is not executable — run: chmod +x {real}",
+                    real = real.display()
+                );
             }
         }
 
@@ -278,7 +295,9 @@ fn diagnose_binary(binary: &str) -> String {
         }
         let uid = unsafe { geteuid() };
         return format!(
-            "permission denied executing '{binary}' (running as uid {uid}) — check file ownership and permissions with: ls -la {binary}"
+            "permission denied executing '{binary}' (uid {uid}, real path '{real}') — \
+check: ls -la {real}",
+            real = real.display()
         );
     }
 
