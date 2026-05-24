@@ -69,6 +69,18 @@ impl ClaudeClient {
             cmd.current_dir(cwd);
         }
 
+        #[cfg(unix)]
+        {
+            extern "C" {
+                fn geteuid() -> u32;
+            }
+            if unsafe { geteuid() } == 0 {
+                let msg = "claude refuses --dangerously-skip-permissions as root/sudo; run devm8 as a non-root user";
+                self.logger.error(msg, None);
+                return Err(AppError::Other(anyhow::anyhow!("{}", msg)));
+            }
+        }
+
         let mut child = cmd.spawn().map_err(|e| {
             self.logger
                 .error(&format!("claude: failed to spawn process: {e}"), None);

@@ -54,9 +54,15 @@ resolve_version() {
   echo "Resolved version: $VERSION"
 }
 
+is_root() {
+  [[ "$EUID" -eq 0 ]]
+}
+
 stop_existing_service() {
   if [[ "$OS" == "macos" ]]; then
     launchctl unload "${HOME}/Library/LaunchAgents/com.devm8.plist" 2>/dev/null || true
+  elif is_root; then
+    systemctl stop devm8 2>/dev/null || true
   else
     systemctl --user stop devm8 2>/dev/null || true
   fi
@@ -199,10 +205,32 @@ EOF
 
 register_linux_service() {
   local binary_path="$1"
-  local unit_dir="$HOME/.config/systemd/user"
-  local unit_path="$unit_dir/devm8.service"
-  mkdir -p "$unit_dir"
-  cat > "$unit_path" <<EOF
+
+  if is_root; then
+    local unit_path="/etc/systemd/system/devm8.service"
+    cat > "$unit_path" <<EOF
+[Unit]
+Description=DevM8 Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${binary_path} start
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now devm8
+  else
+    local unit_dir="$HOME/.config/systemd/user"
+    local unit_path="$unit_dir/devm8.service"
+    mkdir -p "$unit_dir"
+    cat > "$unit_path" <<EOF
 [Unit]
 Description=DevM8 Telegram Bot
 After=network.target
@@ -218,12 +246,19 @@ StartLimitBurst=5
 [Install]
 WantedBy=default.target
 EOF
-  systemctl --user daemon-reload
-  systemctl --user enable --now devm8
-  echo
-  echo "Optional: to start devm8 at boot even when you are not logged in, run:"
-  echo "  loginctl enable-linger $(id -un)"
-  echo "Note: this may require sudo on some systems."
+    if ! systemctl --user daemon-reload 2>/dev/null; then
+      echo "Warning: systemd user bus unavailable. Unit written to $unit_path." >&2
+      echo "Enable manually after logging in as a regular user:" >&2
+      echo "  systemctl --user daemon-reload && systemctl --user enable --now devm8" >&2
+      SERVICE_STATUS="unit written (not started — no user bus)"
+      return
+    fi
+    systemctl --user enable --now devm8
+    echo
+    echo "Optional: to start devm8 at boot even when not logged in, run:"
+    echo "  loginctl enable-linger $(id -un)"
+    echo "Note: this may require sudo on some systems."
+  fi
 }
 
 start_service() {
@@ -233,9 +268,15 @@ start_service() {
     else
       echo "Service not detected in launchd — check ~/Library/LaunchAgents/com.devm8.plist"
     fi
+  elif is_root; then
+    if systemctl is-active devm8 &>/dev/null; then
+      echo "Service running (systemd system)."
+    else
+      echo "Service not detected — check: systemctl status devm8"
+    fi
   else
     if systemctl --user is-active devm8 &>/dev/null; then
-      echo "Service running (systemd)."
+      echo "Service running (systemd user)."
     else
       echo "Service not detected — check: systemctl --user status devm8"
     fi
@@ -247,6 +288,9 @@ do_uninstall() {
   stop_existing_service
   if [[ "$OS" == "macos" ]]; then
     rm -f "${HOME}/Library/LaunchAgents/com.devm8.plist"
+  elif is_root; then
+    systemctl disable devm8 2>/dev/null || true
+    rm -f "/etc/systemd/system/devm8.service"
   else
     systemctl --user disable devm8 2>/dev/null || true
     rm -f "${HOME}/.config/systemd/user/devm8.service"
