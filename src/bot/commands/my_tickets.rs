@@ -113,7 +113,7 @@ pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
     state
         .jira
         .project_keys()
-        .into_iter()
+        .iter()
         .filter(|key| {
             if is_admin || access.is_empty() {
                 return true;

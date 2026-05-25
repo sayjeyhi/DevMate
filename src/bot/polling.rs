@@ -518,7 +518,7 @@ fn is_admin(user_id: i64, state: &AppState) -> bool {
 /// Returns the uppercase project key from the first token of an issue-key argument string.
 /// E.g. "MYAPP-123 some text" → Some("MYAPP"), "notanissue" → None.
 fn project_key_from_issue_args(args: &str) -> Option<String> {
-    let first = args.trim().split_whitespace().next()?;
+    let first = args.split_whitespace().next()?;
     let (prefix, _) = first.split_once('-')?;
     if prefix.is_empty() {
         return None;
