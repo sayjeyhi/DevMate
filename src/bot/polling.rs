@@ -76,7 +76,13 @@ pub async fn start_polling(
 
     logger.info(
         "telegram bot starting",
-        Some(&serde_json::json!({ "projects": config.jira.project_keys })),
+        Some(&serde_json::json!({
+            "jira_projects": config.jira.project_keys,
+            "git_projects": config.projects
+                .as_ref()
+                .map(|m| m.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default(),
+        })),
     );
 
     // Register commands with Telegram's menu
