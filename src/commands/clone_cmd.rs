@@ -27,22 +27,16 @@ pub async fn clone_command(url: Option<String>, path: Option<String>) -> Result<
             .map_err(|e| prompt_err("url", e))?,
     };
 
-    let dest_path = match path {
-        Some(p) => p,
-        None => Text::new("Destination path:")
-            .with_validator(|v: &str| {
-                if v.trim().is_empty() {
-                    return Ok(inquire::validator::Validation::Invalid(
-                        "Path cannot be empty".into(),
-                    ));
-                }
-                Ok(inquire::validator::Validation::Valid)
-            })
-            .prompt()
-            .map_err(|e| prompt_err("path", e))?,
-    };
+    let repo_name = repo_name_from_url(ssh_url.trim());
 
-    let dest_path = expand_tilde(dest_path.trim());
+    let parent = path
+        .map(|p| expand_tilde(p.trim()))
+        .unwrap_or_else(|| ".".to_string());
+
+    let dest_path = std::path::Path::new(&parent)
+        .join(&repo_name)
+        .to_string_lossy()
+        .into_owned();
 
     println!("Cloning {} → {}", ssh_url.trim(), dest_path);
 
@@ -67,12 +61,8 @@ pub async fn clone_command(url: Option<String>, path: Option<String>) -> Result<
         )));
     }
 
-    // Register as a project — default name is the repo folder name
-    let default_name = std::path::Path::new(&dest_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("project")
-        .to_string();
+    // Register as a project — default name is the repo name from the URL
+    let default_name = repo_name.clone();
 
     let project_name = Text::new("Project name:")
         .with_initial_value(&default_name)
@@ -92,6 +82,17 @@ pub async fn clone_command(url: Option<String>, path: Option<String>) -> Result<
     println!("Added to projects under {project_name}");
 
     Ok(())
+}
+
+/// Extract the repo name from an SSH URL.
+/// `git@github.com:org/my-app.git` → `my-app`
+/// `ssh://git@github.com/org/my-app.git` → `my-app`
+fn repo_name_from_url(url: &str) -> String {
+    url.rsplit(['/', ':'])
+        .next()
+        .unwrap_or(url)
+        .trim_end_matches(".git")
+        .to_string()
 }
 
 fn prompt_err(field: &str, e: inquire::InquireError) -> AppError {
