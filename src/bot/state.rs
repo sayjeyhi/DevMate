@@ -111,18 +111,45 @@ pub struct PendingSolve {
 }
 
 // ---------------------------------------------------------------------------
+// Admin panel pending input
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdminPendingAction {
+    Clone,
+    AddProject,
+}
+
+// ---------------------------------------------------------------------------
+// Jira panel pending input
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JiraPendingAction {
+    /// Step 1: waiting for the issue title; holds the chosen project key
+    CreateTitle(String),
+    /// Step 2: waiting for user to confirm or replace the suggested description
+    /// Fields: (project_key, corrected_title, claude_suggested_description)
+    CreateDescription(String, String, String),
+    Move,
+    Comment,
+    Solve,
+}
+
+// ---------------------------------------------------------------------------
 // Permissions wizard state
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct PendingPermissions {
-    /// None while waiting for the admin to type a target user ID.
+    /// The user whose access is currently being edited; None when showing the user list.
     pub target_user_id: Option<i64>,
     /// Project keys currently toggled on.
     pub selected: HashSet<String>,
-    /// ID of the project-picker message (for in-place keyboard edits). Stored
-    /// as the raw i32 so state.rs stays free of teloxide imports.
+    /// ID of the single reused message (for in-place keyboard edits).
     pub message_id: Option<i32>,
+    /// True when the admin clicked "Add new user" and we're waiting for a typed user ID.
+    pub awaiting_user_id_input: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -151,4 +178,10 @@ pub struct ChatState {
 
     /// Active /permissions wizard
     pub pending_permissions: Option<PendingPermissions>,
+
+    /// Waiting for admin to type input for an admin panel action
+    pub pending_admin_action: Option<AdminPendingAction>,
+
+    /// Waiting for user to type input for a Jira panel action
+    pub pending_jira_action: Option<JiraPendingAction>,
 }

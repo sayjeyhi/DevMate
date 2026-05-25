@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use serde_json::json;
 use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
+use teloxide::types::{ChatId, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
 
 use crate::bot::state::{AskSession, PageCache};
 use crate::bot::utils::escape_html;
@@ -107,8 +107,9 @@ fn build_details_action_keyboard(issue_key: &str, back_page: usize) -> InlineKey
 /// Returns the subset of Jira project keys the user is allowed to see.
 /// If `project_access` is empty or a key has no entry, all allowed users can see it.
 pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
-    let is_admin = state.config.telegram.admin_user_id == Some(user_id);
+    let is_admin = state.is_admin(user_id);
     let access = state.project_access.read().unwrap();
+    let is_restricted = !is_admin && access.values().any(|ids| ids.contains(&user_id));
 
     state
         .jira
@@ -119,7 +120,7 @@ pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
                 return true;
             }
             match access.get(key.as_str()) {
-                None => true,
+                None => !is_restricted,
                 Some(ids) => ids.contains(&user_id),
             }
         })
@@ -133,21 +134,21 @@ pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
 
 pub async fn handle_my_tickets(
     bot: Bot,
-    msg: Message,
+    chat_id: ChatId,
     state: Arc<AppState>,
     user_id: i64,
 ) -> Result<()> {
     let project_keys = accessible_project_keys(user_id, &state);
 
     if project_keys.is_empty() {
-        bot.send_message(msg.chat.id, "No project keys configured.")
+        bot.send_message(chat_id, "No project keys configured.")
             .await?;
         return Ok(());
     }
 
     if project_keys.len() == 1 {
         let key = project_keys[0].clone();
-        return handle_my_tickets_project(bot, msg.chat.id, state, &key).await;
+        return handle_my_tickets_project(bot, chat_id, state, &key).await;
     }
 
     // Multiple project keys — show picker
@@ -162,7 +163,7 @@ pub async fn handle_my_tickets(
         .collect();
 
     let keyboard = InlineKeyboardMarkup::new(buttons);
-    bot.send_message(msg.chat.id, "Select a project:")
+    bot.send_message(chat_id, "Select a project:")
         .reply_markup(keyboard)
         .await?;
 

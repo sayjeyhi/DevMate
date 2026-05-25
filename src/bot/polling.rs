@@ -4,17 +4,19 @@ use std::sync::Arc;
 use teloxide::dispatching::{DpHandlerDescription, UpdateFilterExt};
 use teloxide::dptree::Handler;
 use teloxide::prelude::*;
+use teloxide::types::{BotCommandScope, Recipient};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::schema::AppConfig;
 use crate::logger::Logger;
 
 use super::commands::{
-    ask_with_session, handle_add_project, handle_ask, handle_ask_session_callback,
-    handle_ask_text_input, handle_clone, handle_comment, handle_create, handle_help, handle_logs,
-    handle_move, handle_my_tickets, handle_my_tickets_callback, handle_pending_comment,
-    handle_permissions, handle_permissions_done, handle_permissions_toggle,
-    handle_permissions_user_input, handle_solve, handle_solve_repo_callback, handle_status,
+    ask_with_session, handle_admin, handle_admin_callback, handle_admin_input, handle_ask,
+    handle_ask_session_callback, handle_ask_text_input, handle_help, handle_jira,
+    handle_jira_callback, handle_jira_input, handle_my_tickets_callback, handle_pending_comment,
+    handle_permissions_add, handle_permissions_back, handle_permissions_done,
+    handle_permissions_revoke, handle_permissions_toggle, handle_permissions_user_input,
+    handle_permissions_user_select, handle_solve_repo_callback,
 };
 use super::handlers::{handle_pending_slack_reply, handle_slack_callback};
 use super::AppState;
@@ -30,39 +32,18 @@ pub enum BotCommand {
     Help,
     #[command(description = "Start bot or view ticket details")]
     Start(String),
-    #[command(description = "Create a Jira issue")]
-    Create(String),
-    #[command(description = "Move issue to a new status")]
-    Move(String),
-    #[command(description = "Add a comment to an issue")]
-    Comment(String),
-    #[command(description = "Solve an issue with Claude")]
-    Solve(String),
-    #[command(description = "List my Jira tickets")]
-    MyTickets,
     #[command(description = "Ask Claude a question")]
     Ask(String),
-    #[command(description = "Show recent daemon logs")]
-    Logs(String),
-    #[command(description = "Clone a repo via SSH and register it")]
-    Clone(String),
-    #[command(description = "Show daemon and config status")]
-    Status,
-    #[command(description = "Register a local git repo as a project")]
-    AddProject(String),
-    #[command(description = "Manage user project permissions (admin only)")]
-    Permissions,
+    #[command(description = "Jira — manage tickets, create issues, and more")]
+    Jira,
+    #[command(description = "Admin panel — permissions, projects, logs, and repos")]
+    Admin,
 }
 
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
-/// Start the Telegram polling loop.
-///
-/// Runs until `ct` is cancelled. Errors from individual message handlers
-/// are logged and silently swallowed so that one bad update cannot crash the
-/// daemon.
 pub async fn start_polling(
     ct: CancellationToken,
     logger: &Arc<dyn Logger>,
@@ -95,12 +76,33 @@ pub async fn start_polling(
         })),
     );
 
-    // Register commands with Telegram's menu
-    if let Err(e) = bot.set_my_commands(BotCommand::bot_commands()).await {
-        logger.warn(&format!("Failed to register bot commands: {}", e), None);
+    // /admin is admin-only; all other commands are visible to everyone.
+    let all_commands = BotCommand::bot_commands();
+    const ADMIN_ONLY: &[&str] = &["admin"];
+    let non_admin_commands: Vec<_> = all_commands
+        .iter()
+        .filter(|c| !ADMIN_ONLY.contains(&c.command.as_str()))
+        .cloned()
+        .collect();
+
+    if let Err(e) = bot.set_my_commands(non_admin_commands).await {
+        logger.warn(
+            &format!("Failed to register default bot commands: {e}"),
+            None,
+        );
+    }
+    if let Some(admin_id) = config.telegram.admin_user_id {
+        if let Err(e) = bot
+            .set_my_commands(all_commands)
+            .scope(BotCommandScope::Chat {
+                chat_id: Recipient::Id(ChatId(admin_id)),
+            })
+            .await
+        {
+            logger.warn(&format!("Failed to register admin bot commands: {e}"), None);
+        }
     }
 
-    // Build allowed IDs set
     let allowed_ids: Arc<HashSet<i64>> =
         Arc::new(config.telegram.allowed_user_ids.iter().copied().collect());
 
@@ -135,7 +137,6 @@ pub async fn start_polling(
             None
         };
 
-    // Cancel Slack poller when the main token fires
     let ct_slack = ct.clone();
     let cancel_flag_clone = Arc::clone(&slack_cancel_flag);
     tokio::spawn(async move {
@@ -143,7 +144,6 @@ pub async fn start_polling(
         cancel_flag_clone.store(true, std::sync::atomic::Ordering::Relaxed);
     });
 
-    // Build the dispatcher
     let handler = build_handler();
 
     let listener =
@@ -177,15 +177,12 @@ pub async fn start_polling(
 
 fn build_handler() -> Handler<'static, DependencyMap, anyhow::Result<()>, DpHandlerDescription> {
     dptree::entry()
-        // Slash commands
         .branch(
             Update::filter_message()
                 .filter_command::<BotCommand>()
                 .endpoint(dispatch_command),
         )
-        // Callback queries
         .branch(Update::filter_callback_query().endpoint(dispatch_callback))
-        // Plain text / pending state
         .branch(Update::filter_message().endpoint(dispatch_message))
 }
 
@@ -201,7 +198,12 @@ async fn dispatch_command(
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
-    if !is_authorized(&msg, &allowed_ids) {
+
+    if let Some(u) = &msg.from {
+        state.user_names.insert(user_id, format_user_name(u));
+    }
+
+    if !is_authorized(&msg, &allowed_ids, &state) {
         state.logger.warn(
             "unauthorized command attempt",
             Some(&serde_json::json!({ "user_id": user_id, "chat_id": msg.chat.id.0 })),
@@ -212,17 +214,9 @@ async fn dispatch_command(
     let cmd_name = match &cmd {
         BotCommand::Help => "help",
         BotCommand::Start(_) => "start",
-        BotCommand::Create(_) => "create",
-        BotCommand::Move(_) => "move",
-        BotCommand::Comment(_) => "comment",
-        BotCommand::Solve(_) => "solve",
-        BotCommand::MyTickets => "my_tickets",
         BotCommand::Ask(_) => "ask",
-        BotCommand::Logs(_) => "logs",
-        BotCommand::Clone(_) => "clone",
-        BotCommand::Status => "status",
-        BotCommand::AddProject(_) => "add_project",
-        BotCommand::Permissions => "permissions",
+        BotCommand::Jira => "jira",
+        BotCommand::Admin => "admin",
     };
     state.logger.info(
         "command received",
@@ -244,71 +238,15 @@ async fn dispatch_command(
                 .await
             }
         }
-        BotCommand::Create(args) => handle_create(bot, msg, state, args).await,
-        BotCommand::Move(args) => {
-            if let Some(pk) = project_key_from_issue_args(&args) {
-                if !is_authorized_for_project(user_id, &pk, &state) {
-                    bot.send_message(msg.chat.id, "Access denied for that project.")
-                        .await?;
-                    return Ok(());
-                }
-            }
-            handle_move(bot, msg, state, args).await
-        }
-        BotCommand::Comment(args) => {
-            if let Some(pk) = project_key_from_issue_args(&args) {
-                if !is_authorized_for_project(user_id, &pk, &state) {
-                    bot.send_message(msg.chat.id, "Access denied for that project.")
-                        .await?;
-                    return Ok(());
-                }
-            }
-            handle_comment(bot, msg, state, args).await
-        }
-        BotCommand::Solve(args) => {
-            if let Some(pk) = project_key_from_issue_args(&args) {
-                if !is_authorized_for_project(user_id, &pk, &state) {
-                    bot.send_message(msg.chat.id, "Access denied for that project.")
-                        .await?;
-                    return Ok(());
-                }
-            }
-            handle_solve(bot, msg, state, args).await
-        }
-        BotCommand::MyTickets => handle_my_tickets(bot, msg, state, user_id).await,
         BotCommand::Ask(args) => handle_ask(bot, msg, state, args, user_id).await,
-        BotCommand::Logs(args) => {
+        BotCommand::Jira => handle_jira(bot, msg, state).await,
+        BotCommand::Admin => {
             if !is_admin(user_id, &state) {
                 bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
                     .await?;
                 return Ok(());
             }
-            handle_logs(bot, msg, state, args).await
-        }
-        BotCommand::Clone(args) => {
-            if !is_admin(user_id, &state) {
-                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
-                    .await?;
-                return Ok(());
-            }
-            handle_clone(bot, msg, state, args).await
-        }
-        BotCommand::Status => handle_status(bot, msg, state).await,
-        BotCommand::AddProject(args) => {
-            if !is_admin(user_id, &state) {
-                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
-                    .await?;
-                return Ok(());
-            }
-            handle_add_project(bot, msg, state, args).await
-        }
-        BotCommand::Permissions => {
-            if !is_admin(user_id, &state) {
-                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
-                    .await?;
-                return Ok(());
-            }
-            handle_permissions(bot, msg, state).await
+            handle_admin(bot, msg, state).await
         }
     }
 }
@@ -324,7 +262,7 @@ async fn dispatch_callback(
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
     let user_id = query.from.id.0 as i64;
-    if !is_authorized_id(user_id, &allowed_ids) {
+    if !is_authorized_id(user_id, &allowed_ids, &state) {
         state.logger.warn(
             "unauthorized callback attempt",
             Some(&serde_json::json!({ "user_id": user_id })),
@@ -339,8 +277,19 @@ async fn dispatch_callback(
         Some(&serde_json::json!({ "data": data, "user_id": user_id })),
     );
 
+    if data.starts_with("admin:") {
+        if !is_admin(user_id, &state) {
+            let _ = bot.answer_callback_query(query.id).await;
+            return Ok(());
+        }
+        return handle_admin_callback(bot, query, state).await;
+    }
+
+    if data.starts_with("jira:") {
+        return handle_jira_callback(bot, query, state).await;
+    }
+
     if data.starts_with("tickets:") {
-        // Gate project-scoped callbacks before routing into the handler.
         let denied_project = if let Some(key) = data.strip_prefix("tickets:project:") {
             (!is_authorized_for_project(user_id, key, &state)).then_some(key.to_string())
         } else if let Some(rest) = data.strip_prefix("tickets:status:") {
@@ -367,7 +316,6 @@ async fn dispatch_callback(
     }
 
     if data.starts_with("solve:branch:") {
-        // solve:branch:<choice>:<issue_key>
         let parts: Vec<&str> = data.splitn(4, ':').collect();
         if parts.len() == 4 {
             let choice = parts[2].to_string();
@@ -397,8 +345,24 @@ async fn dispatch_callback(
         if data == "perms:done" {
             return handle_permissions_done(bot, query, state).await;
         }
+        if data == "perms:back" {
+            return handle_permissions_back(bot, query, state).await;
+        }
+        if data == "perms:add" {
+            return handle_permissions_add(bot, query, state).await;
+        }
         if let Some(key) = data.strip_prefix("perms:toggle:") {
             return handle_permissions_toggle(bot, query, state, key.to_string()).await;
+        }
+        if let Some(rest) = data.strip_prefix("perms:user:") {
+            if let Ok(target_id) = rest.parse::<i64>() {
+                return handle_permissions_user_select(bot, query, state, target_id).await;
+            }
+        }
+        if let Some(rest) = data.strip_prefix("perms:revoke:") {
+            if let Ok(target_id) = rest.parse::<i64>() {
+                return handle_permissions_revoke(bot, query, state, target_id).await;
+            }
         }
         let _ = bot.answer_callback_query(query.id).await;
         return Ok(());
@@ -418,11 +382,41 @@ async fn dispatch_message(
     state: Arc<AppState>,
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
-    if !is_authorized(&msg, &allowed_ids) {
+    if !is_authorized(&msg, &allowed_ids, &state) {
         return Ok(());
     }
 
+    if let Some(u) = &msg.from {
+        let uid = u.id.0 as i64;
+        state.user_names.insert(uid, format_user_name(u));
+    }
+
+    let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     let chat_id = msg.chat.id.0;
+
+    // Check pending admin panel input (clone / add_project)
+    let pending_admin = state
+        .chat_states
+        .get(&chat_id)
+        .and_then(|s| s.pending_admin_action.clone());
+
+    if let Some(action) = pending_admin {
+        return handle_admin_input(bot, msg, state, action).await;
+    }
+
+    // Check pending Jira panel input
+    let pending_jira = state
+        .chat_states
+        .get(&chat_id)
+        .and_then(|s| s.pending_jira_action.clone());
+
+    if let Some(action) = pending_jira {
+        let auth_check = {
+            let state_ref = Arc::clone(&state);
+            move |pk: &str| is_authorized_for_project(user_id, pk, &state_ref)
+        };
+        return handle_jira_input(bot, msg, state, action, auth_check).await;
+    }
 
     // Check pending permissions: waiting for admin to type a target user ID.
     let waiting_for_user_id = state
@@ -431,7 +425,7 @@ async fn dispatch_message(
         .map(|s| {
             s.pending_permissions
                 .as_ref()
-                .map(|p| p.target_user_id.is_none())
+                .map(|p| p.awaiting_user_id_input)
                 .unwrap_or(false)
         })
         .unwrap_or(false);
@@ -472,7 +466,6 @@ async fn dispatch_message(
         return handle_pending_slack_reply(bot, msg, state).await;
     }
 
-    // Unknown command or plain text — forward to Claude
     let text = msg.text().unwrap_or("").trim().to_string();
     if text.is_empty() {
         return Ok(());
@@ -484,7 +477,6 @@ async fn dispatch_message(
         return Ok(());
     }
 
-    // Free text → route through ask session so the active repo cwd is used.
     ask_with_session(bot, msg.chat.id, state, text).await?;
 
     Ok(())
@@ -494,36 +486,39 @@ async fn dispatch_message(
 // Authorization helpers
 // ---------------------------------------------------------------------------
 
-fn is_authorized(msg: &Message, allowed: &HashSet<i64>) -> bool {
+fn is_authorized(msg: &Message, allowed: &HashSet<i64>, state: &AppState) -> bool {
+    let user_id = match msg.from.as_ref() {
+        Some(u) => u.id.0 as i64,
+        None => return false,
+    };
+    is_authorized_id(user_id, allowed, state)
+}
+
+fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>, state: &AppState) -> bool {
     if allowed.is_empty() {
         return true;
     }
-    msg.from
-        .as_ref()
-        .map(|u| allowed.contains(&(u.id.0 as i64)))
-        .unwrap_or(false)
-}
-
-fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>) -> bool {
-    allowed.is_empty() || allowed.contains(&user_id)
+    if allowed.contains(&user_id) {
+        return true;
+    }
+    let access = state.project_access.read().unwrap();
+    access.values().any(|ids| ids.contains(&user_id))
 }
 
 fn is_admin(user_id: i64, state: &AppState) -> bool {
-    match state.config.telegram.admin_user_id {
-        Some(admin_id) => user_id == admin_id,
-        None => true,
-    }
+    state.is_admin(user_id)
 }
 
-/// Returns the uppercase project key from the first token of an issue-key argument string.
-/// E.g. "MYAPP-123 some text" → Some("MYAPP"), "notanissue" → None.
-fn project_key_from_issue_args(args: &str) -> Option<String> {
-    let first = args.split_whitespace().next()?;
-    let (prefix, _) = first.split_once('-')?;
-    if prefix.is_empty() {
-        return None;
+fn format_user_name(u: &teloxide::types::User) -> String {
+    let mut name = u.first_name.clone();
+    if let Some(last) = &u.last_name {
+        name.push(' ');
+        name.push_str(last);
     }
-    Some(prefix.to_uppercase())
+    if let Some(un) = &u.username {
+        name.push_str(&format!(" (@{})", un));
+    }
+    name
 }
 
 fn is_authorized_for_project(user_id: i64, project_key: &str, state: &AppState) -> bool {
@@ -534,8 +529,9 @@ fn is_authorized_for_project(user_id: i64, project_key: &str, state: &AppState) 
     if access.is_empty() {
         return true;
     }
+    let is_restricted = access.values().any(|ids| ids.contains(&user_id));
     match access.get(project_key) {
-        None => true,
+        None => !is_restricted,
         Some(ids) => ids.contains(&user_id),
     }
 }

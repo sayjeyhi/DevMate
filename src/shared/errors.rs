@@ -115,6 +115,9 @@ pub enum JiraError {
     #[error("Jira server error: {status}")]
     Server { status: u16 },
 
+    #[error("Jira validation error: {message}")]
+    Validation { message: String },
+
     #[error("Jira request timed out")]
     Timeout,
 }

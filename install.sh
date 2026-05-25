@@ -203,6 +203,35 @@ EOF
   launchctl load "$plist_path"
 }
 
+install_bubblewrap() {
+  if command -v bwrap &>/dev/null; then
+    return 0
+  fi
+  echo "Installing bubblewrap for Claude process isolation..."
+  local install_cmd
+  if command -v apt-get &>/dev/null; then
+    install_cmd="apt-get install -y bubblewrap"
+  elif command -v dnf &>/dev/null; then
+    install_cmd="dnf install -y bubblewrap"
+  elif command -v yum &>/dev/null; then
+    install_cmd="yum install -y bubblewrap"
+  elif command -v pacman &>/dev/null; then
+    install_cmd="pacman -S --noconfirm bubblewrap"
+  elif command -v zypper &>/dev/null; then
+    install_cmd="zypper install -y bubblewrap"
+  else
+    echo "Warning: unknown package manager — install bubblewrap manually for Claude isolation." >&2
+    return 0
+  fi
+  if is_root; then
+    $install_cmd
+  elif command -v sudo &>/dev/null; then
+    sudo $install_cmd
+  else
+    echo "Warning: need root to install bubblewrap. Run manually: $install_cmd" >&2
+  fi
+}
+
 register_linux_service() {
   local binary_path="$1"
 
@@ -341,6 +370,7 @@ main() {
     strip_quarantine "$INSTALL_DIR/devm8"
     register_macos_service "$INSTALL_DIR/devm8"
   else
+    install_bubblewrap
     register_linux_service "$INSTALL_DIR/devm8"
   fi
 

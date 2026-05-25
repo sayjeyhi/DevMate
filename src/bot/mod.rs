@@ -54,9 +54,19 @@ pub struct AppState {
     /// Wraps a copy of config.telegram.project_access and is updated at
     /// runtime by /permissions without requiring a daemon restart.
     pub project_access: RwLock<HashMap<String, Vec<i64>>>,
+
+    /// Cache of user_id → display name, populated whenever a user sends a message.
+    pub user_names: DashMap<i64, String>,
 }
 
 impl AppState {
+    pub fn is_admin(&self, user_id: i64) -> bool {
+        match self.config.telegram.admin_user_id {
+            Some(admin_id) => user_id == admin_id,
+            None => true,
+        }
+    }
+
     pub fn new(
         config: AppConfig,
         logger: Arc<dyn Logger>,
@@ -85,6 +95,8 @@ impl AppState {
             binary_path: config.claude.binary_path.clone(),
             timeout_ms: config.claude.timeout_ms,
             model: None,
+            api_key: config.claude.api_key.clone(),
+            sandbox_enabled: config.claude.sandbox,
         };
 
         let claude = Arc::new(ClaudeClient::new(claude_cfg, Arc::clone(&logger)));
@@ -117,6 +129,7 @@ impl AppState {
             slack,
             bot_username,
             project_access,
+            user_names: DashMap::new(),
         })
     }
 }

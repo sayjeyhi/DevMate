@@ -271,6 +271,7 @@ fn collect_claude(existing: Option<&ClaudeConfig>) -> Result<ClaudeConfig, AppEr
         binary_path,
         api_key,
         timeout_ms: None,
+        sandbox: cfg!(target_os = "linux"),
     })
 }
 

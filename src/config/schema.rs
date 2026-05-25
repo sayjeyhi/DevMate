@@ -40,11 +40,19 @@ pub struct JiraConfig {
     pub project_keys: Vec<String>,
 }
 
+fn default_sandbox() -> bool {
+    cfg!(target_os = "linux")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaudeConfig {
     pub binary_path: String,
     pub api_key: Option<String>,
     pub timeout_ms: Option<u64>,
+    /// Isolate each Claude subprocess with bubblewrap (Linux only).
+    /// Defaults to true on Linux, false on macOS.
+    #[serde(default = "default_sandbox")]
+    pub sandbox: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
