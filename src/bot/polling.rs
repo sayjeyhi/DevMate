@@ -4,6 +4,7 @@ use std::sync::Arc;
 use teloxide::dispatching::{DpHandlerDescription, UpdateFilterExt};
 use teloxide::dptree::Handler;
 use teloxide::prelude::*;
+use teloxide::types::{BotCommandScope, Recipient};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::schema::AppConfig;
@@ -96,9 +97,33 @@ pub async fn start_polling(
         })),
     );
 
-    // Register commands with Telegram's menu
-    if let Err(e) = bot.set_my_commands(BotCommand::bot_commands()).await {
-        logger.warn(&format!("Failed to register bot commands: {}", e), None);
+    // Register commands with Telegram's menu.
+    // Admin-only commands are hidden from the default menu and only shown
+    // in the admin's own private chat scope.
+    let all_commands = BotCommand::bot_commands();
+    const ADMIN_ONLY: &[&str] = &["logs", "clone", "add_project", "permissions"];
+    let non_admin_commands: Vec<_> = all_commands
+        .iter()
+        .filter(|c| !ADMIN_ONLY.contains(&c.command.as_str()))
+        .cloned()
+        .collect();
+
+    if let Err(e) = bot.set_my_commands(non_admin_commands).await {
+        logger.warn(
+            &format!("Failed to register default bot commands: {e}"),
+            None,
+        );
+    }
+    if let Some(admin_id) = config.telegram.admin_user_id {
+        if let Err(e) = bot
+            .set_my_commands(all_commands)
+            .scope(BotCommandScope::Chat {
+                chat_id: Recipient::Id(ChatId(admin_id)),
+            })
+            .await
+        {
+            logger.warn(&format!("Failed to register admin bot commands: {e}"), None);
+        }
     }
 
     // Build allowed IDs set
@@ -544,10 +569,7 @@ fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>, state: &AppState) -> b
 }
 
 fn is_admin(user_id: i64, state: &AppState) -> bool {
-    match state.config.telegram.admin_user_id {
-        Some(admin_id) => user_id == admin_id,
-        None => true,
-    }
+    state.is_admin(user_id)
 }
 
 /// Returns the uppercase project key from the first token of an issue-key argument string.
@@ -581,8 +603,9 @@ fn is_authorized_for_project(user_id: i64, project_key: &str, state: &AppState) 
     if access.is_empty() {
         return true;
     }
+    let is_restricted = access.values().any(|ids| ids.contains(&user_id));
     match access.get(project_key) {
-        None => true,
+        None => !is_restricted,
         Some(ids) => ids.contains(&user_id),
     }
 }

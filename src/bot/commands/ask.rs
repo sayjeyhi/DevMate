@@ -283,7 +283,8 @@ fn accessible_repos(
     user_id: i64,
 ) -> Vec<(String, std::path::PathBuf, Arc<crate::git::GitClient>)> {
     let access = state.project_access.read().unwrap();
-    let is_admin = state.config.telegram.admin_user_id == Some(user_id);
+    let is_admin = state.is_admin(user_id);
+    let is_restricted = !is_admin && access.values().any(|ids| ids.contains(&user_id));
     let mut repos: Vec<(String, std::path::PathBuf, Arc<crate::git::GitClient>)> = state
         .git_map
         .iter()
@@ -292,7 +293,7 @@ fn accessible_repos(
                 return true;
             }
             match access.get(project_key.as_str()) {
-                None => true,
+                None => !is_restricted,
                 Some(ids) => ids.contains(&user_id),
             }
         })

@@ -60,6 +60,13 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn is_admin(&self, user_id: i64) -> bool {
+        match self.config.telegram.admin_user_id {
+            Some(admin_id) => user_id == admin_id,
+            None => true,
+        }
+    }
+
     pub fn new(
         config: AppConfig,
         logger: Arc<dyn Logger>,

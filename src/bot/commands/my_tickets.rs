@@ -107,8 +107,9 @@ fn build_details_action_keyboard(issue_key: &str, back_page: usize) -> InlineKey
 /// Returns the subset of Jira project keys the user is allowed to see.
 /// If `project_access` is empty or a key has no entry, all allowed users can see it.
 pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
-    let is_admin = state.config.telegram.admin_user_id == Some(user_id);
+    let is_admin = state.is_admin(user_id);
     let access = state.project_access.read().unwrap();
+    let is_restricted = !is_admin && access.values().any(|ids| ids.contains(&user_id));
 
     state
         .jira
@@ -119,7 +120,7 @@ pub fn accessible_project_keys(user_id: i64, state: &AppState) -> Vec<String> {
                 return true;
             }
             match access.get(key.as_str()) {
-                None => true,
+                None => !is_restricted,
                 Some(ids) => ids.contains(&user_id),
             }
         })
