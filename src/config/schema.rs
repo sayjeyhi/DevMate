@@ -113,8 +113,8 @@ pub struct AppConfig {
     pub claude: ClaudeConfig,
 
     /// Map from PROJECT_KEY → list of repo paths
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub repos: Option<HashMap<String, Vec<String>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "repos")]
+    pub projects: Option<HashMap<String, Vec<String>>>,
 
     #[serde(default)]
     pub app: AppSettings,

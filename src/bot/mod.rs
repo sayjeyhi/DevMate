@@ -84,9 +84,9 @@ impl AppState {
 
         let claude = Arc::new(ClaudeClient::new(claude_cfg, Arc::clone(&logger)));
 
-        // Build git_map from config.repos
+        // Build git_map from config.projects
         let mut git_map: HashMap<String, Vec<Arc<GitClient>>> = HashMap::new();
-        if let Some(repos) = &config.repos {
+        if let Some(repos) = &config.projects {
             for (project_key, paths) in repos {
                 let clients: Vec<Arc<GitClient>> =
                     paths.iter().map(|p| Arc::new(GitClient::new(p))).collect();

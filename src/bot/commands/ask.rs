@@ -257,7 +257,7 @@ pub async fn handle_ask(bot: Bot, msg: Message, state: Arc<AppState>, args: Stri
         .collect();
 
     if all_repos.is_empty() {
-        // No repos — ask without git context
+        // No projects configured — ask without git context
         let pending = PendingAsk {
             repo_path: None,
             git: None,
@@ -321,7 +321,7 @@ pub async fn handle_ask(bot: Bot, msg: Message, state: Arc<AppState>, args: Stri
         return ask_with_session(bot, msg.chat.id, state, question).await;
     }
 
-    // Multiple repos — show picker
+    // Multiple projects — show picker
     let buttons: Vec<Vec<InlineKeyboardButton>> = all_repos
         .iter()
         .enumerate()
@@ -358,7 +358,7 @@ pub async fn handle_ask(bot: Bot, msg: Message, state: Arc<AppState>, args: Stri
     }
 
     let keyboard = InlineKeyboardMarkup::new(buttons);
-    bot.send_message(msg.chat.id, "Select a repository:")
+    bot.send_message(msg.chat.id, "Select a project:")
         .reply_markup(keyboard)
         .await?;
 
@@ -461,8 +461,13 @@ pub async fn handle_ask_text_input(bot: Bot, msg: Message, state: Arc<AppState>)
                         state
                             .logger
                             .error(&format!("ask: commit failed: {e}"), None);
-                        bot.send_message(msg.chat.id, format!("Commit failed: {e}"))
-                            .await?;
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Commit failed: {e}\n\nSend commit message again to retry:"),
+                        )
+                        .await?;
+                        // Keep pending_ask so the user can retry
+                        return Ok(());
                     }
                 }
             } else {
@@ -760,6 +765,7 @@ pub async fn handle_ask_session_callback(
                 );
 
                 let commit_cwd = g.repo_path.to_string_lossy().to_string();
+                let typing = keep_typing(bot.clone(), chat_id);
                 let suggestion = state
                     .claude
                     .ask(
@@ -771,6 +777,7 @@ pub async fn handle_ask_session_callback(
                     )
                     .await
                     .unwrap_or_default();
+                typing.abort();
 
                 let repo_path = state
                     .chat_states
