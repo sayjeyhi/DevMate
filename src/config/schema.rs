@@ -23,6 +23,9 @@ pub struct TelegramConfig {
     pub bot_token: String,
     #[serde(default)]
     pub allowed_user_ids: Vec<i64>,
+    /// Single admin user ID. Only this user can run add_project, logs, clone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin_user_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

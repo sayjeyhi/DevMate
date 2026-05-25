@@ -76,8 +76,8 @@ async fn send_repo_ready_message(
     );
 
     let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback("Pull latest", "ask:pull_latest"),
-        InlineKeyboardButton::callback("CLI", "ask:cli"),
+        InlineKeyboardButton::callback("⬇️ Pull latest", "ask:pull_latest"),
+        InlineKeyboardButton::callback("💻 CLI", "ask:cli"),
     ]]);
 
     bot.send_message(chat_id, text)
@@ -92,26 +92,48 @@ async fn send_repo_ready_message(
 // Session keyboard
 // ---------------------------------------------------------------------------
 
-fn session_keyboard(pushed: bool) -> InlineKeyboardMarkup {
+async fn session_keyboard(
+    pushed: bool,
+    git: Option<&Arc<crate::git::GitClient>>,
+) -> InlineKeyboardMarkup {
+    let (commit_label, push_label, pull_label) = if let Some(g) = git {
+        let (changed, ahead, behind) = tokio::join!(
+            g.changed_files_count(),
+            g.commits_ahead(),
+            g.commits_behind()
+        );
+        (
+            format!("✅ Commit ({} changed)", changed),
+            format!("🚀 Push ({} ahead)", ahead),
+            format!("⬇️ Pull ({} behind)", behind),
+        )
+    } else {
+        (
+            "✅ Commit".to_string(),
+            "🚀 Push".to_string(),
+            "⬇️ Pull".to_string(),
+        )
+    };
+
     let mut rows: Vec<Vec<InlineKeyboardButton>> = vec![
         vec![
-            InlineKeyboardButton::callback("Follow up", "ask:followup"),
-            InlineKeyboardButton::callback("CLI", "ask:cli"),
+            InlineKeyboardButton::callback("💬 Follow up", "ask:followup"),
+            InlineKeyboardButton::callback("💻 CLI", "ask:cli"),
         ],
         vec![
-            InlineKeyboardButton::callback("Branch", "ask:branch"),
-            InlineKeyboardButton::callback("Commit", "ask:commit"),
+            InlineKeyboardButton::callback("🌿 Branch", "ask:branch"),
+            InlineKeyboardButton::callback(commit_label, "ask:commit"),
         ],
         vec![
-            InlineKeyboardButton::callback("Push", "ask:push"),
-            InlineKeyboardButton::callback("Pull", "ask:pull"),
+            InlineKeyboardButton::callback(push_label, "ask:push"),
+            InlineKeyboardButton::callback(pull_label, "ask:pull"),
         ],
-        vec![InlineKeyboardButton::callback("End session", "ask:end")],
+        vec![InlineKeyboardButton::callback("🔚 End session", "ask:end")],
     ];
 
     if pushed {
         rows.push(vec![InlineKeyboardButton::callback(
-            "Open PR",
+            "🔀 Open PR",
             "ask:openpr",
         )]);
     }
@@ -239,7 +261,7 @@ pub async fn ask_with_session(
     }
 
     // Show "What next?" keyboard
-    let keyboard = session_keyboard(pushed);
+    let keyboard = session_keyboard(pushed, git_opt.as_ref()).await;
     bot.send_message(chat_id, "What would you like to do next?")
         .reply_markup(keyboard)
         .await?;
@@ -566,13 +588,17 @@ pub async fn handle_ask_text_input(bot: Bot, msg: Message, state: Arc<AppState>)
             }
 
             // Show session keyboard so user can continue
-            let pushed = state
-                .chat_states
-                .get(&msg.chat.id.0)
-                .and_then(|cs| cs.ask_session.as_ref().map(|s| s.pushed))
-                .unwrap_or(false);
+            let (pushed, git) = {
+                let cs = state.chat_states.get(&msg.chat.id.0);
+                let pushed = cs
+                    .as_ref()
+                    .and_then(|cs| cs.ask_session.as_ref().map(|s| s.pushed))
+                    .unwrap_or(false);
+                let git = cs.and_then(|cs| cs.ask_session.as_ref().and_then(|s| s.git.clone()));
+                (pushed, git)
+            };
             bot.send_message(msg.chat.id, "What would you like to do next?")
-                .reply_markup(session_keyboard(pushed))
+                .reply_markup(session_keyboard(pushed, git.as_ref()).await)
                 .await?;
         }
 
@@ -753,8 +779,8 @@ pub async fn handle_ask_session_callback(
                 if !is_clean {
                     // Ask to stash or keep
                     let keyboard = InlineKeyboardMarkup::new(vec![vec![
-                        InlineKeyboardButton::callback("Stash first", "ask:branch_stash"),
-                        InlineKeyboardButton::callback("Keep changes", "ask:branch_keep"),
+                        InlineKeyboardButton::callback("📦 Stash first", "ask:branch_stash"),
+                        InlineKeyboardButton::callback("📌 Keep changes", "ask:branch_keep"),
                     ]]);
                     bot.send_message(chat_id, "Working tree is dirty. Stash or keep changes?")
                         .reply_markup(keyboard)
@@ -934,7 +960,7 @@ pub async fn handle_ask_session_callback(
                         let text = format!("Pushed branch <b>{}</b>.", escape_html(&branch));
                         if !is_main {
                             let keyboard = InlineKeyboardMarkup::new(vec![vec![
-                                InlineKeyboardButton::callback("Open PR", "ask:openpr"),
+                                InlineKeyboardButton::callback("🔀 Open PR", "ask:openpr"),
                             ]]);
                             bot.send_message(chat_id, text)
                                 .parse_mode(ParseMode::Html)

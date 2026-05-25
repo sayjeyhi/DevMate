@@ -92,9 +92,15 @@ fn collect_telegram(existing: Option<&TelegramConfig>) -> Result<TelegramConfig,
 
     let allowed_user_ids = parse_ids(&allowed_user_ids_raw);
 
+    // Keep existing admin if re-running wizard; otherwise default to first allowed user.
+    let admin_user_id = existing
+        .and_then(|c| c.admin_user_id)
+        .or_else(|| allowed_user_ids.first().copied());
+
     Ok(TelegramConfig {
         bot_token,
         allowed_user_ids,
+        admin_user_id,
     })
 }
 

@@ -246,10 +246,31 @@ async fn dispatch_command(
         BotCommand::Solve(args) => handle_solve(bot, msg, state, args).await,
         BotCommand::MyTickets => handle_my_tickets(bot, msg, state).await,
         BotCommand::Ask(args) => handle_ask(bot, msg, state, args).await,
-        BotCommand::Logs(args) => handle_logs(bot, msg, state, args).await,
-        BotCommand::Clone(args) => handle_clone(bot, msg, state, args).await,
+        BotCommand::Logs(args) => {
+            if !is_admin(user_id, &state) {
+                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
+                    .await?;
+                return Ok(());
+            }
+            handle_logs(bot, msg, state, args).await
+        }
+        BotCommand::Clone(args) => {
+            if !is_admin(user_id, &state) {
+                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
+                    .await?;
+                return Ok(());
+            }
+            handle_clone(bot, msg, state, args).await
+        }
         BotCommand::Status => handle_status(bot, msg, state).await,
-        BotCommand::AddProject(args) => handle_add_project(bot, msg, state, args).await,
+        BotCommand::AddProject(args) => {
+            if !is_admin(user_id, &state) {
+                bot.send_message(msg.chat.id, "Access denied. This command is admin-only.")
+                    .await?;
+                return Ok(());
+            }
+            handle_add_project(bot, msg, state, args).await
+        }
     }
 }
 
@@ -400,4 +421,11 @@ fn is_authorized(msg: &Message, allowed: &HashSet<i64>) -> bool {
 
 fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>) -> bool {
     allowed.is_empty() || allowed.contains(&user_id)
+}
+
+fn is_admin(user_id: i64, state: &AppState) -> bool {
+    match state.config.telegram.admin_user_id {
+        Some(admin_id) => user_id == admin_id,
+        None => true,
+    }
 }
