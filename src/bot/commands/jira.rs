@@ -9,7 +9,10 @@ use crate::bot::utils::project_key_from_args;
 use crate::bot::AppState;
 
 use super::my_tickets::accessible_project_keys;
-use super::{handle_comment, handle_create, handle_move, handle_my_tickets, handle_solve};
+use super::{
+    handle_comment, handle_create_confirm, handle_create_suggest, handle_move, handle_my_tickets,
+    handle_solve,
+};
 
 pub async fn handle_jira(bot: Bot, msg: Message, _state: Arc<AppState>) -> Result<()> {
     let keyboard = InlineKeyboardMarkup::new(vec![
@@ -31,14 +34,10 @@ pub async fn handle_jira(bot: Bot, msg: Message, _state: Arc<AppState>) -> Resul
     Ok(())
 }
 
-async fn prompt_create_title(bot: &Bot, chat_id: ChatId, project_key: &str) -> Result<()> {
+async fn prompt_for_title(bot: &Bot, chat_id: ChatId, project_key: &str) -> Result<()> {
     bot.send_message(
         chat_id,
-        format!(
-            "Project: <code>{project_key}</code>\n\n\
-             Send the issue title. Optionally add a raw description after <code>--</code>:\n\
-             <code>New login page -- Add OAuth2 support and redirect flow</code>"
-        ),
+        format!("Project: <code>{project_key}</code>\n\nSend the issue title:"),
     )
     .parse_mode(ParseMode::Html)
     .await?;
@@ -62,19 +61,38 @@ pub async fn handle_jira_callback(
 
     let _ = bot.answer_callback_query(query.id).await;
 
-    // Project selected from the create picker
+    // Step 3a: user confirmed Claude's description
+    if data == "jira:create_confirm" {
+        let pending = state
+            .chat_states
+            .get(&chat_id.0)
+            .and_then(|s| s.pending_jira_action.clone());
+
+        if let Some(JiraPendingAction::CreateDescription(pk, title, suggested)) = pending {
+            state
+                .chat_states
+                .entry(chat_id.0)
+                .or_default()
+                .pending_jira_action = None;
+            return handle_create_confirm(bot, chat_id, state, &pk, &title, &suggested).await;
+        }
+        return Ok(());
+    }
+
+    // Step 1b: project selected from picker
     if let Some(pk) = data.strip_prefix("jira:create_project:") {
         state
             .chat_states
             .entry(chat_id.0)
             .or_default()
-            .pending_jira_action = Some(JiraPendingAction::CreateContent(pk.to_string()));
-        return prompt_create_title(&bot, chat_id, pk).await;
+            .pending_jira_action = Some(JiraPendingAction::CreateTitle(pk.to_string()));
+        return prompt_for_title(&bot, chat_id, pk).await;
     }
 
     match data {
         "jira:my_tickets" => handle_my_tickets(bot, chat_id, state, user_id).await,
 
+        // Step 1a: show project picker (or skip if single project)
         "jira:create" => {
             let projects = accessible_project_keys(user_id, &state);
 
@@ -84,18 +102,16 @@ pub async fn handle_jira_callback(
                 return Ok(());
             }
 
-            // Single project — skip the picker
             if projects.len() == 1 {
                 let pk = projects.into_iter().next().unwrap();
                 state
                     .chat_states
                     .entry(chat_id.0)
                     .or_default()
-                    .pending_jira_action = Some(JiraPendingAction::CreateContent(pk.clone()));
-                return prompt_create_title(&bot, chat_id, &pk).await;
+                    .pending_jira_action = Some(JiraPendingAction::CreateTitle(pk.clone()));
+                return prompt_for_title(&bot, chat_id, &pk).await;
             }
 
-            // Multiple projects — show picker buttons
             let buttons: Vec<Vec<InlineKeyboardButton>> = projects
                 .iter()
                 .map(|k| {
@@ -170,6 +186,7 @@ pub async fn handle_jira_input(
     let chat_id = msg.chat.id;
     let text = msg.text().unwrap_or("").trim().to_string();
 
+    // Clear current pending state (suggest step will re-set it to CreateDescription)
     state
         .chat_states
         .entry(chat_id.0)
@@ -177,8 +194,14 @@ pub async fn handle_jira_input(
         .pending_jira_action = None;
 
     match action {
-        JiraPendingAction::CreateContent(project_key) => {
-            handle_create(bot, chat_id, state, project_key, text).await
+        // Step 2: title received → suggest description
+        JiraPendingAction::CreateTitle(project_key) => {
+            handle_create_suggest(bot, chat_id, state, project_key, text).await
+        }
+
+        // Step 3b: user sent their own description instead of using Claude's
+        JiraPendingAction::CreateDescription(pk, title, _suggested) => {
+            handle_create_confirm(bot, chat_id, state, &pk, &title, &text).await
         }
 
         JiraPendingAction::Move => {

@@ -18,7 +18,7 @@ pub use admin::{handle_admin, handle_admin_callback, handle_admin_input};
 pub use ask::{ask_with_session, handle_ask, handle_ask_session_callback, handle_ask_text_input};
 pub use clone::handle_clone;
 pub use comment::{handle_comment, handle_pending_comment};
-pub use create::handle_create;
+pub use create::{handle_create_confirm, handle_create_suggest};
 pub use help::handle_help;
 pub use jira::{handle_jira, handle_jira_callback, handle_jira_input};
 pub use logs::handle_logs;
