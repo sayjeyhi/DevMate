@@ -112,7 +112,7 @@ pub async fn daemon_command() -> Result<(), AppError> {
             let ct_clone = ct.clone();
             tokio::select! {
                 r = crate::bot::polling::start_polling(ct, &logger, &config) => {
-                    LoopControl::Exit(r.map_err(anyhow::Error::from))
+                    LoopControl::Exit(r)
                 }
                 _ = sigterm_stream.recv() => {
                     ct_clone.cancel();
@@ -131,7 +131,7 @@ pub async fn daemon_command() -> Result<(), AppError> {
             let ct_clone = ct.clone();
             tokio::select! {
                 r = crate::bot::polling::start_polling(ct, &logger, &config) => {
-                    LoopControl::Exit(r.map_err(anyhow::Error::from))
+                    LoopControl::Exit(r)
                 }
                 _ = tokio::signal::ctrl_c() => {
                     ct_clone.cancel();

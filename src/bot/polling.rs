@@ -10,9 +10,10 @@ use crate::config::schema::AppConfig;
 use crate::logger::Logger;
 
 use super::commands::{
-    ask_with_session, handle_ask, handle_ask_session_callback, handle_ask_text_input,
-    handle_comment, handle_create, handle_help, handle_logs, handle_move, handle_my_tickets,
-    handle_my_tickets_callback, handle_pending_comment, handle_solve, handle_solve_repo_callback,
+    ask_with_session, handle_add_project, handle_ask, handle_ask_session_callback,
+    handle_ask_text_input, handle_clone, handle_comment, handle_create, handle_help, handle_logs,
+    handle_move, handle_my_tickets, handle_my_tickets_callback, handle_pending_comment,
+    handle_solve, handle_solve_repo_callback, handle_status,
 };
 use super::handlers::{handle_pending_slack_reply, handle_slack_callback};
 use super::AppState;
@@ -42,6 +43,12 @@ pub enum BotCommand {
     Ask(String),
     #[command(description = "Show recent daemon logs")]
     Logs(String),
+    #[command(description = "Clone a repo via SSH and register it")]
+    Clone(String),
+    #[command(description = "Show daemon and config status")]
+    Status,
+    #[command(description = "Register a local git repo as a project")]
+    AddProject(String),
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +216,9 @@ async fn dispatch_command(
         BotCommand::MyTickets => "my_tickets",
         BotCommand::Ask(_) => "ask",
         BotCommand::Logs(_) => "logs",
+        BotCommand::Clone(_) => "clone",
+        BotCommand::Status => "status",
+        BotCommand::AddProject(_) => "add_project",
     };
     state.logger.info(
         "command received",
@@ -237,6 +247,9 @@ async fn dispatch_command(
         BotCommand::MyTickets => handle_my_tickets(bot, msg, state).await,
         BotCommand::Ask(args) => handle_ask(bot, msg, state, args).await,
         BotCommand::Logs(args) => handle_logs(bot, msg, state, args).await,
+        BotCommand::Clone(args) => handle_clone(bot, msg, state, args).await,
+        BotCommand::Status => handle_status(bot, msg, state).await,
+        BotCommand::AddProject(args) => handle_add_project(bot, msg, state, args).await,
     }
 }
 
