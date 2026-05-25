@@ -29,9 +29,23 @@ pub async fn clone_command(url: Option<String>, path: Option<String>) -> Result<
 
     let repo_name = repo_name_from_url(ssh_url.trim());
 
-    let parent = path
-        .map(|p| expand_tilde(p.trim()))
-        .unwrap_or_else(|| ".".to_string());
+    let parent = match path {
+        Some(p) => expand_tilde(p.trim()),
+        None => {
+            let raw = Text::new("Destination directory:")
+                .with_validator(|v: &str| {
+                    if v.trim().is_empty() {
+                        return Ok(inquire::validator::Validation::Invalid(
+                            "Path cannot be empty".into(),
+                        ));
+                    }
+                    Ok(inquire::validator::Validation::Valid)
+                })
+                .prompt()
+                .map_err(|e| prompt_err("path", e))?;
+            expand_tilde(raw.trim())
+        }
+    };
 
     let dest_path = std::path::Path::new(&parent)
         .join(&repo_name)
