@@ -13,8 +13,9 @@ use super::commands::{
     ask_with_session, handle_add_project, handle_ask, handle_ask_session_callback,
     handle_ask_text_input, handle_clone, handle_comment, handle_create, handle_help, handle_logs,
     handle_move, handle_my_tickets, handle_my_tickets_callback, handle_pending_comment,
-    handle_permissions, handle_permissions_done, handle_permissions_toggle,
-    handle_permissions_user_input, handle_solve, handle_solve_repo_callback, handle_status,
+    handle_permissions, handle_permissions_add, handle_permissions_back, handle_permissions_done,
+    handle_permissions_revoke, handle_permissions_toggle, handle_permissions_user_input,
+    handle_permissions_user_select, handle_solve, handle_solve_repo_callback, handle_status,
 };
 use super::handlers::{handle_pending_slack_reply, handle_slack_callback};
 use super::AppState;
@@ -201,7 +202,13 @@ async fn dispatch_command(
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
-    if !is_authorized(&msg, &allowed_ids) {
+
+    // Cache the user's display name for /permissions UI.
+    if let Some(u) = &msg.from {
+        state.user_names.insert(user_id, format_user_name(u));
+    }
+
+    if !is_authorized(&msg, &allowed_ids, &state) {
         state.logger.warn(
             "unauthorized command attempt",
             Some(&serde_json::json!({ "user_id": user_id, "chat_id": msg.chat.id.0 })),
@@ -324,7 +331,7 @@ async fn dispatch_callback(
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
     let user_id = query.from.id.0 as i64;
-    if !is_authorized_id(user_id, &allowed_ids) {
+    if !is_authorized_id(user_id, &allowed_ids, &state) {
         state.logger.warn(
             "unauthorized callback attempt",
             Some(&serde_json::json!({ "user_id": user_id })),
@@ -397,8 +404,24 @@ async fn dispatch_callback(
         if data == "perms:done" {
             return handle_permissions_done(bot, query, state).await;
         }
+        if data == "perms:back" {
+            return handle_permissions_back(bot, query, state).await;
+        }
+        if data == "perms:add" {
+            return handle_permissions_add(bot, query, state).await;
+        }
         if let Some(key) = data.strip_prefix("perms:toggle:") {
             return handle_permissions_toggle(bot, query, state, key.to_string()).await;
+        }
+        if let Some(rest) = data.strip_prefix("perms:user:") {
+            if let Ok(target_id) = rest.parse::<i64>() {
+                return handle_permissions_user_select(bot, query, state, target_id).await;
+            }
+        }
+        if let Some(rest) = data.strip_prefix("perms:revoke:") {
+            if let Ok(target_id) = rest.parse::<i64>() {
+                return handle_permissions_revoke(bot, query, state, target_id).await;
+            }
         }
         let _ = bot.answer_callback_query(query.id).await;
         return Ok(());
@@ -418,8 +441,14 @@ async fn dispatch_message(
     state: Arc<AppState>,
     allowed_ids: Arc<HashSet<i64>>,
 ) -> anyhow::Result<()> {
-    if !is_authorized(&msg, &allowed_ids) {
+    if !is_authorized(&msg, &allowed_ids, &state) {
         return Ok(());
+    }
+
+    // Cache the user's display name for /permissions UI.
+    if let Some(u) = &msg.from {
+        let uid = u.id.0 as i64;
+        state.user_names.insert(uid, format_user_name(u));
     }
 
     let chat_id = msg.chat.id.0;
@@ -431,7 +460,7 @@ async fn dispatch_message(
         .map(|s| {
             s.pending_permissions
                 .as_ref()
-                .map(|p| p.target_user_id.is_none())
+                .map(|p| p.awaiting_user_id_input)
                 .unwrap_or(false)
         })
         .unwrap_or(false);
@@ -494,18 +523,24 @@ async fn dispatch_message(
 // Authorization helpers
 // ---------------------------------------------------------------------------
 
-fn is_authorized(msg: &Message, allowed: &HashSet<i64>) -> bool {
+fn is_authorized(msg: &Message, allowed: &HashSet<i64>, state: &AppState) -> bool {
+    let user_id = match msg.from.as_ref() {
+        Some(u) => u.id.0 as i64,
+        None => return false,
+    };
+    is_authorized_id(user_id, allowed, state)
+}
+
+fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>, state: &AppState) -> bool {
     if allowed.is_empty() {
         return true;
     }
-    msg.from
-        .as_ref()
-        .map(|u| allowed.contains(&(u.id.0 as i64)))
-        .unwrap_or(false)
-}
-
-fn is_authorized_id(user_id: i64, allowed: &HashSet<i64>) -> bool {
-    allowed.is_empty() || allowed.contains(&user_id)
+    if allowed.contains(&user_id) {
+        return true;
+    }
+    // Users granted access to any project via /permissions are allowed.
+    let access = state.project_access.read().unwrap();
+    access.values().any(|ids| ids.contains(&user_id))
 }
 
 fn is_admin(user_id: i64, state: &AppState) -> bool {
@@ -524,6 +559,18 @@ fn project_key_from_issue_args(args: &str) -> Option<String> {
         return None;
     }
     Some(prefix.to_uppercase())
+}
+
+fn format_user_name(u: &teloxide::types::User) -> String {
+    let mut name = u.first_name.clone();
+    if let Some(last) = &u.last_name {
+        name.push(' ');
+        name.push_str(last);
+    }
+    if let Some(un) = &u.username {
+        name.push_str(&format!(" (@{})", un));
+    }
+    name
 }
 
 fn is_authorized_for_project(user_id: i64, project_key: &str, state: &AppState) -> bool {

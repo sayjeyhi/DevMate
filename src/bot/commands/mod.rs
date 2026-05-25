@@ -21,8 +21,9 @@ pub use logs::handle_logs;
 pub use move_cmd::handle_move;
 pub use my_tickets::{handle_my_tickets, handle_my_tickets_callback};
 pub use permissions::{
-    handle_permissions, handle_permissions_done, handle_permissions_toggle,
-    handle_permissions_user_input,
+    handle_permissions, handle_permissions_add, handle_permissions_back, handle_permissions_done,
+    handle_permissions_revoke, handle_permissions_toggle, handle_permissions_user_input,
+    handle_permissions_user_select,
 };
 pub use solve::{handle_solve, handle_solve_repo_callback};
 pub use status::handle_status;

@@ -116,13 +116,14 @@ pub struct PendingSolve {
 
 #[derive(Debug, Clone)]
 pub struct PendingPermissions {
-    /// None while waiting for the admin to type a target user ID.
+    /// The user whose access is currently being edited; None when showing the user list.
     pub target_user_id: Option<i64>,
     /// Project keys currently toggled on.
     pub selected: HashSet<String>,
-    /// ID of the project-picker message (for in-place keyboard edits). Stored
-    /// as the raw i32 so state.rs stays free of teloxide imports.
+    /// ID of the single reused message (for in-place keyboard edits).
     pub message_id: Option<i32>,
+    /// True when the admin clicked "Add new user" and we're waiting for a typed user ID.
+    pub awaiting_user_id_input: bool,
 }
 
 // ---------------------------------------------------------------------------
