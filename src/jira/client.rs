@@ -210,11 +210,7 @@ impl JiraClient {
                         });
                     }
                 }
-                if s.is_server_error() {
-                    AppError::Jira(JiraError::Server { status: s.as_u16() })
-                } else {
-                    AppError::Jira(JiraError::Server { status: s.as_u16() })
-                }
+                AppError::Jira(JiraError::Server { status: s.as_u16() })
             }
         }
     }
