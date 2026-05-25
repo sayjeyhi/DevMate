@@ -11,6 +11,10 @@ pub struct ClaudeClientConfig {
     pub timeout_ms: Option<u64>,
     /// Default model to pass via `--model`.
     pub model: Option<String>,
+    /// Anthropic API key — passed into the sandbox environment when sandbox is active.
+    pub api_key: Option<String>,
+    /// Isolate Claude subprocess with bubblewrap (effective on Linux only).
+    pub sandbox_enabled: bool,
 }
 
 /// Per-request options that override the client defaults.

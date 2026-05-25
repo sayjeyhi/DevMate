@@ -28,6 +28,109 @@ impl ClaudeClient {
         Self { config, logger }
     }
 
+    fn build_direct_command(&self, opts: &AskOptions) -> Command {
+        let mut cmd = Command::new(&self.config.binary_path);
+        cmd.args([
+            "--print",
+            "--verbose",
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "stream-json",
+        ]);
+        cmd.env_remove("CLAUDECODE");
+        if let Some(ref cwd) = opts.cwd {
+            cmd.current_dir(cwd);
+        }
+        cmd
+    }
+
+    /// Build a bubblewrap-sandboxed command.
+    /// Claude sees only /workspace (the project dir) and /home/sandbox/.claude (read-only auth).
+    /// Every other home dir and unrelated path is hidden from the subprocess.
+    #[cfg(target_os = "linux")]
+    fn build_bwrap_command(&self, opts: &AskOptions) -> Command {
+        let mut cmd = Command::new("bwrap");
+
+        // Bind whole rootfs read-only so claude binary and system libs remain accessible.
+        cmd.args(["--ro-bind", "/", "/"]);
+
+        // Override with fresh kernel-managed mounts.
+        cmd.args(["--proc", "/proc"]);
+        cmd.args(["--dev", "/dev"]);
+        cmd.args(["--tmpfs", "/tmp"]);
+
+        // Wipe all user home dirs: SSH keys, other projects, credentials become invisible.
+        cmd.args(["--tmpfs", "/home"]);
+        cmd.args(["--tmpfs", "/root"]);
+
+        // Fake home for Claude's auth files.
+        cmd.args(["--dir", "/home/sandbox"]);
+        if let Ok(host_home) = std::env::var("HOME") {
+            let claude_dir = format!("{host_home}/.claude");
+            if std::path::Path::new(&claude_dir).exists() {
+                cmd.args(["--ro-bind", &claude_dir, "/home/sandbox/.claude"]);
+            }
+        }
+
+        // Mount only the target project dir as writable at /workspace.
+        let inner_cwd = if let Some(ref cwd) = opts.cwd {
+            cmd.args(["--bind", cwd, "/workspace"]);
+            "/workspace"
+        } else {
+            "/tmp"
+        };
+        cmd.args(["--chdir", inner_cwd]);
+
+        // Clear the inherited environment so no host secrets leak in.
+        cmd.arg("--clearenv");
+        cmd.args(["--setenv", "HOME", "/home/sandbox"]);
+        cmd.args(["--setenv", "TMPDIR", "/tmp"]);
+        cmd.args([
+            "--setenv",
+            "PATH",
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        ]);
+
+        // Thread the Anthropic API key in explicitly (env was cleared above).
+        let api_key = self
+            .config
+            .api_key
+            .clone()
+            .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok());
+        if let Some(ref key) = api_key {
+            cmd.args(["--setenv", "ANTHROPIC_API_KEY", key]);
+        }
+
+        // Isolate PID, hostname, and IPC namespaces.
+        // No --unshare-net: Claude needs to reach the Anthropic API.
+        cmd.args([
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-ipc",
+            "--die-with-parent",
+        ]);
+
+        // The claude binary and its flags follow all bwrap options.
+        cmd.arg(&self.config.binary_path);
+        cmd.args([
+            "--print",
+            "--verbose",
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "stream-json",
+        ]);
+
+        cmd
+    }
+
+    fn build_command(&self, opts: &AskOptions) -> Command {
+        #[cfg(target_os = "linux")]
+        if self.config.sandbox_enabled {
+            return self.build_bwrap_command(opts);
+        }
+        self.build_direct_command(opts)
+    }
+
     pub async fn ask(&self, prompt: &str, opts: AskOptions) -> Result<String, AppError> {
         let timeout_ms = opts
             .timeout_ms
@@ -42,18 +145,12 @@ impl ClaudeClient {
                 "model": model.unwrap_or("default"),
                 "cwd": opts.cwd.as_deref().unwrap_or("(none)"),
                 "timeout_ms": timeout_ms,
+                "sandbox": self.config.sandbox_enabled,
                 "prompt_len": prompt.len(),
             })),
         );
 
-        let mut cmd = Command::new(&self.config.binary_path);
-        cmd.args([
-            "--print",
-            "--verbose",
-            "--dangerously-skip-permissions",
-            "--output-format",
-            "stream-json",
-        ]);
+        let mut cmd = self.build_command(&opts);
 
         if let Some(m) = model {
             cmd.args(["--model", m]);
@@ -62,12 +159,6 @@ impl ClaudeClient {
         cmd.stdin(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
-
-        cmd.env_remove("CLAUDECODE");
-
-        if let Some(ref cwd) = opts.cwd {
-            cmd.current_dir(cwd);
-        }
 
         #[cfg(unix)]
         {

@@ -95,6 +95,8 @@ impl AppState {
             binary_path: config.claude.binary_path.clone(),
             timeout_ms: config.claude.timeout_ms,
             model: None,
+            api_key: config.claude.api_key.clone(),
+            sandbox_enabled: config.claude.sandbox,
         };
 
         let claude = Arc::new(ClaudeClient::new(claude_cfg, Arc::clone(&logger)));

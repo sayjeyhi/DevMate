@@ -30,6 +30,13 @@ struct JiraIssueResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct JiraCreateResponse {
+    key: String,
+    #[serde(rename = "self")]
+    self_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct JiraIssueFields {
     summary: String,
     status: JiraStatusField,
@@ -184,8 +191,31 @@ impl JiraClient {
                     .and_then(|s| s.parse::<u64>().ok());
                 AppError::Jira(JiraError::RateLimit { retry_after })
             }
-            s if s.is_server_error() => AppError::Jira(JiraError::Server { status: s.as_u16() }),
-            s => AppError::Jira(JiraError::Server { status: s.as_u16() }),
+            s => {
+                let body = resp.text().await.unwrap_or_default();
+                if let Ok(json) = serde_json::from_str::<Value>(&body) {
+                    let mut parts: Vec<String> = Vec::new();
+                    if let Some(msgs) = json.get("errorMessages").and_then(|v| v.as_array()) {
+                        parts.extend(msgs.iter().filter_map(|v| v.as_str()).map(String::from));
+                    }
+                    if let Some(errs) = json.get("errors").and_then(|v| v.as_object()) {
+                        parts
+                            .extend(errs.iter().map(|(k, v)| {
+                                format!("{}: {}", k, v.as_str().unwrap_or_default())
+                            }));
+                    }
+                    if !parts.is_empty() {
+                        return AppError::Jira(JiraError::Validation {
+                            message: parts.join("; "),
+                        });
+                    }
+                }
+                if s.is_server_error() {
+                    AppError::Jira(JiraError::Server { status: s.as_u16() })
+                } else {
+                    AppError::Jira(JiraError::Server { status: s.as_u16() })
+                }
+            }
         }
     }
 
@@ -309,18 +339,31 @@ impl JiraClient {
             .clone()
             .unwrap_or_else(|| "Task".to_string());
 
-        let adf_desc = to_adf(description);
-        let body = json!({
-            "fields": {
-                "project": { "key": project_key },
-                "summary": title,
-                "description": adf_desc,
-                "issuetype": { "name": issue_type }
-            }
+        let mut fields = json!({
+            "project": { "key": project_key },
+            "summary": title,
+            "issuetype": { "name": issue_type }
         });
 
-        let raw: JiraIssueResponse = self.post("/issue", &body).await?;
-        Ok(self.map_issue(raw))
+        if !description.is_empty() {
+            fields["description"] = serde_json::to_value(to_adf(description))?;
+        }
+
+        let body = json!({ "fields": fields });
+
+        let raw: JiraCreateResponse = self.post("/issue", &body).await?;
+        let url = raw
+            .self_url
+            .as_deref()
+            .map(|_| format!("https://{}/browse/{}", self.config.host, raw.key))
+            .unwrap_or_else(|| format!("https://{}/browse/{}", self.config.host, raw.key));
+        Ok(JiraIssue {
+            key: raw.key,
+            summary: title.to_string(),
+            status: String::new(),
+            description: description.to_string(),
+            url,
+        })
     }
 
     /// Fetch a single issue by key.

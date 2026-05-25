@@ -57,6 +57,20 @@ pub async fn start_command() -> Result<(), AppError> {
     }
     let _ = meta;
 
+    // On Linux, verify bubblewrap is available when sandbox mode is enabled.
+    #[cfg(target_os = "linux")]
+    if config.claude.sandbox {
+        use std::process::Command as StdCommand;
+        if StdCommand::new("bwrap").arg("--version").output().is_err() {
+            return Err(AppError::Friendly(FriendlyError::with_hint(
+                "bubblewrap (bwrap) not found — required for sandbox mode".to_string(),
+                "Install with: apt install bubblewrap  \
+                 (or set claude.sandbox = false in your config to disable isolation)"
+                    .to_string(),
+            )));
+        }
+    }
+
     // Stop the daemon if already running.
     let current_status = agent_status().await;
     if current_status.running {
