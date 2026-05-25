@@ -14,13 +14,22 @@ use crate::claude::types::AskOptions;
 // Prompt builder
 // ---------------------------------------------------------------------------
 
+const TELEGRAM_SYSTEM_PREFIX: &str = "\
+[Context: You are responding inside a Telegram bot. Your text reply is the ONLY output the \
+user sees — there is no terminal or separate display. Rules:\
+\n- When you run a command or read a file, ALWAYS include the actual output verbatim in your \
+reply. Never say it was \"shown\", \"displayed\", or \"listed above\".\
+\n- Format code/output in markdown code blocks so it renders cleanly.\
+\n- Keep replies concise but complete — do not truncate data the user asked for.]\
+\n\n---\n\n";
+
 fn build_prompt(question: &str, history: &[HistoryEntry], context: Option<&str>) -> String {
     let context_prefix = context
         .map(|c| format!("{}\n\n---\n\n", c))
         .unwrap_or_default();
 
     if history.is_empty() {
-        return format!("{}{}", context_prefix, question);
+        return format!("{}{}{}", TELEGRAM_SYSTEM_PREFIX, context_prefix, question);
     }
     let turns = history
         .iter()
@@ -35,8 +44,8 @@ fn build_prompt(question: &str, history: &[HistoryEntry], context: Option<&str>)
         .collect::<Vec<_>>()
         .join("\n\n");
     format!(
-        "{}This is a continuing conversation. Previous exchanges:\n\n{}\n\nUser: {}",
-        context_prefix, turns, question
+        "{}{}This is a continuing conversation. Previous exchanges:\n\n{}\n\nUser: {}",
+        TELEGRAM_SYSTEM_PREFIX, context_prefix, turns, question
     )
 }
 
@@ -66,10 +75,10 @@ async fn send_repo_ready_message(
         status_icon,
     );
 
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
-        "Pull latest",
-        "ask:pull_latest",
-    )]]);
+    let keyboard = InlineKeyboardMarkup::new(vec![vec![
+        InlineKeyboardButton::callback("Pull latest", "ask:pull_latest"),
+        InlineKeyboardButton::callback("CLI", "ask:cli"),
+    ]]);
 
     bot.send_message(chat_id, text)
         .parse_mode(ParseMode::Html)
@@ -87,16 +96,17 @@ fn session_keyboard(pushed: bool) -> InlineKeyboardMarkup {
     let mut rows: Vec<Vec<InlineKeyboardButton>> = vec![
         vec![
             InlineKeyboardButton::callback("Follow up", "ask:followup"),
+            InlineKeyboardButton::callback("CLI", "ask:cli"),
+        ],
+        vec![
             InlineKeyboardButton::callback("Branch", "ask:branch"),
-        ],
-        vec![
             InlineKeyboardButton::callback("Commit", "ask:commit"),
-            InlineKeyboardButton::callback("Push", "ask:push"),
         ],
         vec![
+            InlineKeyboardButton::callback("Push", "ask:push"),
             InlineKeyboardButton::callback("Pull", "ask:pull"),
-            InlineKeyboardButton::callback("End session", "ask:end"),
         ],
+        vec![InlineKeyboardButton::callback("End session", "ask:end")],
     ];
 
     if pushed {
@@ -479,6 +489,91 @@ pub async fn handle_ask_text_input(bot: Bot, msg: Message, state: Arc<AppState>)
                 let mut entry = state.chat_states.entry(msg.chat.id.0).or_default();
                 entry.pending_ask = None;
             }
+        }
+
+        Some(AskMode::Cli) => {
+            {
+                let mut entry = state.chat_states.entry(msg.chat.id.0).or_default();
+                entry.pending_ask = None;
+            }
+
+            let cwd = pending
+                .repo_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string());
+
+            state.logger.info(
+                "ask: running cli command",
+                Some(&json!({ "cmd": &text, "cwd": cwd.as_deref().unwrap_or("(default)") })),
+            );
+
+            let status_msg = bot
+                .send_message(
+                    msg.chat.id,
+                    format!("Running: <code>{}</code>…", escape_html(&text)),
+                )
+                .parse_mode(ParseMode::Html)
+                .await?;
+
+            let mut cmd = tokio::process::Command::new("sh");
+            cmd.args(["-c", &text]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            if let Some(ref dir) = cwd {
+                cmd.current_dir(dir);
+            }
+
+            let output =
+                tokio::time::timeout(std::time::Duration::from_secs(60), cmd.output()).await;
+
+            bot.delete_message(msg.chat.id, status_msg.id).await.ok();
+
+            let reply = match output {
+                Err(_) => "Command timed out after 60 seconds.".to_string(),
+                Ok(Err(e)) => format!("Failed to spawn: {e}"),
+                Ok(Ok(o)) => {
+                    let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+                    let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                    let exit_code = o.status.code().unwrap_or(-1);
+
+                    let mut parts: Vec<String> = Vec::new();
+                    parts.push(format!(
+                        "<b>$</b> <code>{}</code>  (exit {})",
+                        escape_html(&text),
+                        exit_code
+                    ));
+                    if !stdout.trim().is_empty() {
+                        parts.push(format!("<pre>{}</pre>", escape_html(stdout.trim())));
+                    }
+                    if !stderr.trim().is_empty() {
+                        parts.push(format!(
+                            "<b>stderr:</b>\n<pre>{}</pre>",
+                            escape_html(stderr.trim())
+                        ));
+                    }
+                    if stdout.trim().is_empty() && stderr.trim().is_empty() {
+                        parts.push("(no output)".to_string());
+                    }
+                    parts.join("\n")
+                }
+            };
+
+            let chunks = split_message(&reply, 4096);
+            for chunk in &chunks {
+                bot.send_message(msg.chat.id, chunk)
+                    .parse_mode(ParseMode::Html)
+                    .await?;
+            }
+
+            // Show session keyboard so user can continue
+            let pushed = state
+                .chat_states
+                .get(&msg.chat.id.0)
+                .and_then(|cs| cs.ask_session.as_ref().map(|s| s.pushed))
+                .unwrap_or(false);
+            bot.send_message(msg.chat.id, "What would you like to do next?")
+                .reply_markup(session_keyboard(pushed))
+                .await?;
         }
 
         Some(AskMode::Followup) | None => {
@@ -890,6 +985,36 @@ pub async fn handle_ask_session_callback(
                 bot.send_message(chat_id, "No git context available.")
                     .await?;
             }
+        }
+
+        "cli" => {
+            let repo_path = state
+                .chat_states
+                .get(&chat_id.0)
+                .and_then(|cs| cs.ask_session.as_ref().and_then(|s| s.repo_path.clone()));
+            let git = state
+                .chat_states
+                .get(&chat_id.0)
+                .and_then(|cs| cs.ask_session.as_ref().and_then(|s| s.git.clone()));
+
+            let pending = PendingAsk {
+                repo_path: repo_path.clone(),
+                git,
+                inline_question: None,
+                mode: Some(AskMode::Cli),
+            };
+            {
+                let mut entry = state.chat_states.entry(chat_id.0).or_default();
+                entry.pending_ask = Some(pending);
+            }
+
+            let cwd_hint = repo_path
+                .as_ref()
+                .map(|p| format!(" (cwd: <code>{}</code>)", escape_html(&p.to_string_lossy())))
+                .unwrap_or_default();
+            bot.send_message(chat_id, format!("Enter the command to run{}:", cwd_hint))
+                .parse_mode(ParseMode::Html)
+                .await?;
         }
 
         "end" => {

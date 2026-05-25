@@ -24,6 +24,7 @@ pub enum AskMode {
     Followup,
     Branch,
     Commit,
+    Cli,
 }
 
 #[derive(Debug, Clone)]
