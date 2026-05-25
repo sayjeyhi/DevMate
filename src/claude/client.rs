@@ -55,7 +55,7 @@ fn bind_home_subtree(cmd: &mut Command, path_str: &str) {
         }
 
         // Create parent dir inside sandbox tmpfs, then bind the subtree read-only.
-        cmd.args(["--dir", &user_dir.to_string_lossy().into_owned()]);
+        cmd.args(["--dir", &*user_dir.to_string_lossy()]);
         cmd.args(["--ro-bind", &mount_str, &mount_str]);
     }
 }
