@@ -299,16 +299,10 @@ impl JiraClient {
     /// Create a new issue and return it.
     pub async fn create_issue(
         &self,
+        project_key: &str,
         title: &str,
         description: &str,
     ) -> Result<JiraIssue, AppError> {
-        // Use the first configured project key.
-        let project_key = self
-            .config
-            .project_keys
-            .first()
-            .cloned()
-            .unwrap_or_default();
         let issue_type = self
             .config
             .issue_type

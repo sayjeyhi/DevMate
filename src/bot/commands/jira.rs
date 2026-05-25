@@ -8,6 +8,7 @@ use crate::bot::state::JiraPendingAction;
 use crate::bot::utils::project_key_from_args;
 use crate::bot::AppState;
 
+use super::my_tickets::accessible_project_keys;
 use super::{handle_comment, handle_create, handle_move, handle_my_tickets, handle_solve};
 
 pub async fn handle_jira(bot: Bot, msg: Message, _state: Arc<AppState>) -> Result<()> {
@@ -30,6 +31,20 @@ pub async fn handle_jira(bot: Bot, msg: Message, _state: Arc<AppState>) -> Resul
     Ok(())
 }
 
+async fn prompt_create_title(bot: &Bot, chat_id: ChatId, project_key: &str) -> Result<()> {
+    bot.send_message(
+        chat_id,
+        format!(
+            "Project: <code>{project_key}</code>\n\n\
+             Send the issue title. Optionally add a raw description after <code>--</code>:\n\
+             <code>New login page -- Add OAuth2 support and redirect flow</code>"
+        ),
+    )
+    .parse_mode(ParseMode::Html)
+    .await?;
+    Ok(())
+}
+
 pub async fn handle_jira_callback(
     bot: Bot,
     query: CallbackQuery,
@@ -47,23 +62,56 @@ pub async fn handle_jira_callback(
 
     let _ = bot.answer_callback_query(query.id).await;
 
+    // Project selected from the create picker
+    if let Some(pk) = data.strip_prefix("jira:create_project:") {
+        state
+            .chat_states
+            .entry(chat_id.0)
+            .or_default()
+            .pending_jira_action = Some(JiraPendingAction::CreateContent(pk.to_string()));
+        return prompt_create_title(&bot, chat_id, pk).await;
+    }
+
     match data {
         "jira:my_tickets" => handle_my_tickets(bot, chat_id, state, user_id).await,
+
         "jira:create" => {
-            state
-                .chat_states
-                .entry(chat_id.0)
-                .or_default()
-                .pending_jira_action = Some(JiraPendingAction::Create);
-            bot.send_message(
-                chat_id,
-                "Send the issue title (optionally add description after <code>--</code>):\n\
-                 <code>New login page -- Add OAuth2 support</code>",
-            )
-            .parse_mode(ParseMode::Html)
-            .await?;
+            let projects = accessible_project_keys(user_id, &state);
+
+            if projects.is_empty() {
+                bot.send_message(chat_id, "No Jira projects configured.")
+                    .await?;
+                return Ok(());
+            }
+
+            // Single project — skip the picker
+            if projects.len() == 1 {
+                let pk = projects.into_iter().next().unwrap();
+                state
+                    .chat_states
+                    .entry(chat_id.0)
+                    .or_default()
+                    .pending_jira_action = Some(JiraPendingAction::CreateContent(pk.clone()));
+                return prompt_create_title(&bot, chat_id, &pk).await;
+            }
+
+            // Multiple projects — show picker buttons
+            let buttons: Vec<Vec<InlineKeyboardButton>> = projects
+                .iter()
+                .map(|k| {
+                    vec![InlineKeyboardButton::callback(
+                        k.clone(),
+                        format!("jira:create_project:{k}"),
+                    )]
+                })
+                .collect();
+
+            bot.send_message(chat_id, "Select a project:")
+                .reply_markup(InlineKeyboardMarkup::new(buttons))
+                .await?;
             Ok(())
         }
+
         "jira:move" => {
             state
                 .chat_states
@@ -79,6 +127,7 @@ pub async fn handle_jira_callback(
             .await?;
             Ok(())
         }
+
         "jira:comment" => {
             state
                 .chat_states
@@ -94,6 +143,7 @@ pub async fn handle_jira_callback(
             .await?;
             Ok(())
         }
+
         "jira:solve" => {
             state
                 .chat_states
@@ -105,6 +155,7 @@ pub async fn handle_jira_callback(
                 .await?;
             Ok(())
         }
+
         _ => Ok(()),
     }
 }
@@ -125,25 +176,42 @@ pub async fn handle_jira_input(
         .or_default()
         .pending_jira_action = None;
 
-    // Check project authorization for issue-key actions
-    let needs_project_check = matches!(
-        action,
-        JiraPendingAction::Move | JiraPendingAction::Comment | JiraPendingAction::Solve
-    );
-    if needs_project_check {
-        if let Some(pk) = project_key_from_args(&text) {
-            if !is_authorized_for_project(&pk) {
-                bot.send_message(chat_id, "Access denied for that project.")
-                    .await?;
-                return Ok(());
-            }
-        }
-    }
-
     match action {
-        JiraPendingAction::Create => handle_create(bot, chat_id, state, text).await,
-        JiraPendingAction::Move => handle_move(bot, chat_id, state, text).await,
-        JiraPendingAction::Comment => handle_comment(bot, chat_id, state, text).await,
-        JiraPendingAction::Solve => handle_solve(bot, chat_id, state, text).await,
+        JiraPendingAction::CreateContent(project_key) => {
+            handle_create(bot, chat_id, state, project_key, text).await
+        }
+
+        JiraPendingAction::Move => {
+            if let Some(pk) = project_key_from_args(&text) {
+                if !is_authorized_for_project(&pk) {
+                    bot.send_message(chat_id, "Access denied for that project.")
+                        .await?;
+                    return Ok(());
+                }
+            }
+            handle_move(bot, chat_id, state, text).await
+        }
+
+        JiraPendingAction::Comment => {
+            if let Some(pk) = project_key_from_args(&text) {
+                if !is_authorized_for_project(&pk) {
+                    bot.send_message(chat_id, "Access denied for that project.")
+                        .await?;
+                    return Ok(());
+                }
+            }
+            handle_comment(bot, chat_id, state, text).await
+        }
+
+        JiraPendingAction::Solve => {
+            if let Some(pk) = project_key_from_args(&text) {
+                if !is_authorized_for_project(&pk) {
+                    bot.send_message(chat_id, "Access denied for that project.")
+                        .await?;
+                    return Ok(());
+                }
+            }
+            handle_solve(bot, chat_id, state, text).await
+        }
     }
 }

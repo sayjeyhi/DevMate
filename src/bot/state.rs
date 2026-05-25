@@ -126,7 +126,8 @@ pub enum AdminPendingAction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JiraPendingAction {
-    Create,
+    /// Waiting for title/description; holds the chosen project key
+    CreateContent(String),
     Move,
     Comment,
     Solve,

@@ -9,70 +9,94 @@ use crate::bot::utils::keep_typing;
 use crate::bot::AppState;
 use crate::claude::types::AskOptions;
 
-const ENRICH_PROMPT_TEMPLATE: &str = "\
-You are a technical project manager writing Jira ticket descriptions.
+const IMPROVE_PROMPT: &str = "\
+You are a technical project manager improving a Jira ticket.
 
-Title: {title}
+Project: {project_key}
+Original title: {title}
+{description_section}
 
-Raw description provided by the developer:
-{description}
+Your tasks:
+1. Correct and improve the title — fix grammar, spelling, and clarity; keep it concise (under 80 chars).
+2. Write a professional description including: brief overview, acceptance criteria as a bullet list, \
+and relevant technical notes. If a raw description was provided, expand and improve it; \
+otherwise generate one from the title.
 
-Please rewrite the description to be clear, concise, and well-structured for a Jira ticket. \
-Include: a brief overview, acceptance criteria (as a bullet list), and any relevant technical notes. \
-Keep the tone professional. Output only the final description text with no preamble.";
+Respond in this exact format with nothing else before or after:
+TITLE: <corrected title>
 
-const EXPAND_PROMPT_TEMPLATE: &str = "\
-You are a technical project manager writing Jira ticket descriptions.
+DESCRIPTION:
+<description here>";
 
-Title: {title}
+fn parse_claude_response(response: &str) -> (String, String) {
+    let title = response
+        .lines()
+        .find(|l| l.starts_with("TITLE:"))
+        .map(|l| l["TITLE:".len()..].trim().to_string())
+        .unwrap_or_default();
 
-Based only on the title, write a clear, concise Jira ticket description. \
-Include: a brief overview, acceptance criteria (as a bullet list), and any relevant technical notes. \
-Keep the tone professional. Output only the final description text with no preamble.";
+    let desc = response
+        .find("DESCRIPTION:\n")
+        .map(|idx| response[idx + "DESCRIPTION:\n".len()..].trim().to_string())
+        .unwrap_or_default();
+
+    (title, desc)
+}
 
 pub async fn handle_create(
     bot: Bot,
     chat_id: ChatId,
     state: Arc<AppState>,
+    project_key: String,
     args: String,
 ) -> Result<()> {
     let args = args.trim().to_string();
     if args.is_empty() {
         bot.send_message(
             chat_id,
-            "Send the issue title (optionally with description after <code>--</code>):\n\
-             <code>New login page -- Add OAuth2 support</code>",
+            "Send the issue title (optionally add a raw description after <code>--</code>):\n\
+             <code>New login page -- Add OAuth2 support and redirect flow</code>",
         )
         .parse_mode(ParseMode::Html)
         .await?;
         return Ok(());
     }
 
-    let (title, raw_description, use_enrich) = if let Some(idx) = args.find(" -- ") {
-        let t = args[..idx].trim().to_string();
-        let d = args[idx + 4..].trim().to_string();
-        (t, d, true)
+    let (title, raw_description) = if let Some(idx) = args.find(" -- ") {
+        (
+            args[..idx].trim().to_string(),
+            args[idx + 4..].trim().to_string(),
+        )
     } else {
-        (args.clone(), String::new(), false)
+        (args.trim().to_string(), String::new())
+    };
+
+    let description_section = if raw_description.is_empty() {
+        "No description provided — generate from title.".to_string()
+    } else {
+        format!("Raw description:\n{raw_description}")
     };
 
     state.logger.info(
-        "create: generating description with Claude",
-        Some(&json!({ "title": &title, "has_description": use_enrich })),
+        "create: improving title and description with Claude",
+        Some(&json!({
+            "project": &project_key,
+            "title": &title,
+            "has_description": !raw_description.is_empty()
+        })),
     );
 
-    let thinking = bot.send_message(chat_id, "Thinking...").await?;
+    let thinking = bot
+        .send_message(chat_id, "Improving title and generating description...")
+        .await?;
     let _typing = keep_typing(bot.clone(), chat_id);
 
-    let prompt = if use_enrich {
-        ENRICH_PROMPT_TEMPLATE
-            .replace("{title}", &title)
-            .replace("{description}", &raw_description)
-    } else {
-        EXPAND_PROMPT_TEMPLATE.replace("{title}", &title)
-    };
+    let prompt = IMPROVE_PROMPT
+        .replace("{project_key}", &project_key)
+        .replace("{title}", &title)
+        .replace("{description_section}", &description_section);
 
-    let description = match state.claude.ask(&prompt, AskOptions::default()).await {
+    let claude_output = match state.claude.ask(&prompt, AskOptions::default()).await {
         Ok(text) => text,
         Err(e) => {
             state.logger.error(
@@ -85,17 +109,34 @@ pub async fn handle_create(
         }
     };
 
+    let (final_title, final_description) = parse_claude_response(&claude_output);
+
+    let final_title = if final_title.is_empty() {
+        title
+    } else {
+        final_title
+    };
+    let final_description = if final_description.is_empty() {
+        claude_output.clone()
+    } else {
+        final_description
+    };
+
     state.logger.info(
         "create: creating Jira issue",
-        Some(&json!({ "title": &title })),
+        Some(&json!({ "project": &project_key, "title": &final_title })),
     );
 
-    let issue = match state.jira.create_issue(&title, &description).await {
+    let issue = match state
+        .jira
+        .create_issue(&project_key, &final_title, &final_description)
+        .await
+    {
         Ok(issue) => issue,
         Err(e) => {
             state.logger.error(
                 &format!("create: Jira error: {e}"),
-                Some(&json!({ "title": &title })),
+                Some(&json!({ "project": &project_key, "title": &final_title })),
             );
             bot.edit_message_text(chat_id, thinking.id, format!("Jira error: {e}"))
                 .await?;
