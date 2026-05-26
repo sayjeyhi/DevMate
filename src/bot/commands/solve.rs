@@ -5,7 +5,9 @@ use serde_json::json;
 use teloxide::prelude::*;
 use teloxide::types::{ChatId, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
 
-use crate::bot::state::{AskSession, ChatState, PendingGrill, PendingSolve, PendingSolveAction};
+use crate::bot::state::{
+    AskSession, ChatState, PendingGrill, PendingPostAnalysis, PendingSolve, PendingSolveAction,
+};
 use crate::bot::utils::{escape_html, keep_typing, split_message};
 use crate::bot::AppState;
 use crate::claude::types::AskOptions;
@@ -452,7 +454,7 @@ async fn complete_grill(
     qa_context.push_str(&build_qa_history(&grill.qa_history));
 
     state.logger.info(
-        "solve: grill complete, starting implement session",
+        "solve: grill complete, running analysis",
         Some(&json!({ "key": &grill.issue_key, "questions": grill.qa_history.len() })),
     );
 
@@ -466,17 +468,22 @@ async fn complete_grill(
     )
     .await?;
 
-    let repo_path = grill.git.as_ref().map(|g| g.repo_path.clone());
     {
         let mut entry = state.chat_states.entry(chat_id.0).or_default();
-        entry.ask_session = Some(AskSession::new(repo_path, grill.git).with_context(qa_context));
+        entry.pending_post_analysis = Some(PendingPostAnalysis {
+            issue_key: grill.issue_key.clone(),
+            git: grill.git.clone(),
+            qa_context: Some(qa_context),
+        });
     }
 
-    bot.send_message(
-        chat_id,
-        "All questions answered. Implementation session is ready — send your first message to start.",
-    )
-    .await?;
+    let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        "⚡ Implement".to_string(),
+        format!("solve:post:implement:{}", grill.issue_key),
+    )]]);
+    bot.send_message(chat_id, "All questions answered. Ready to implement?")
+        .reply_markup(keyboard)
+        .await?;
 
     Ok(())
 }
@@ -504,7 +511,33 @@ pub async fn handle_solve_action_callback(
     }
 
     match action {
-        "analyze" => solve_by_key(bot, chat_id, state, user_id, issue_key, cwd).await,
+        "analyze" => {
+            solve_by_key(
+                bot.clone(),
+                chat_id,
+                state.clone(),
+                user_id,
+                issue_key,
+                cwd.clone(),
+            )
+            .await?;
+            {
+                let mut entry = state.chat_states.entry(chat_id.0).or_default();
+                entry.pending_post_analysis = Some(PendingPostAnalysis {
+                    issue_key: issue_key.to_string(),
+                    git,
+                    qa_context: None,
+                });
+            }
+            let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                "⚡ Implement".to_string(),
+                format!("solve:post:implement:{}", issue_key),
+            )]]);
+            bot.send_message(chat_id, "Ready to implement?")
+                .reply_markup(keyboard)
+                .await?;
+            Ok(())
+        }
         "grill" => grill_by_key(bot, chat_id, state, user_id, issue_key, cwd, git).await,
         "implement" => {
             solve_by_key(
@@ -516,10 +549,14 @@ pub async fn handle_solve_action_callback(
                 cwd.clone(),
             )
             .await?;
-            let repo_path = git.as_ref().map(|g| g.repo_path.clone());
+            let session = if let Some(mg) = git {
+                state.worktree_session(user_id, mg).await
+            } else {
+                AskSession::new(user_id, None, None)
+            };
             {
                 let mut entry = state.chat_states.entry(chat_id.0).or_default();
-                entry.ask_session = Some(AskSession::new(repo_path, git));
+                entry.ask_session = Some(session);
             }
             bot.send_message(
                 chat_id,
@@ -919,6 +956,58 @@ pub async fn handle_solve_branch_name_input(
     }
 
     show_solve_action_picker(bot, chat_id, state, &issue_key, cwd, git).await
+}
+
+pub async fn handle_post_analysis_implement(
+    bot: Bot,
+    chat_id: ChatId,
+    state: Arc<AppState>,
+    user_id: i64,
+    issue_key: &str,
+) -> Result<()> {
+    let pending = state
+        .chat_states
+        .get(&chat_id.0)
+        .and_then(|cs| cs.pending_post_analysis.clone());
+
+    let Some(p) = pending else {
+        bot.send_message(chat_id, "No pending analysis. Run /solve again.")
+            .await?;
+        return Ok(());
+    };
+
+    if p.issue_key != issue_key {
+        bot.send_message(chat_id, "No pending analysis. Run /solve again.")
+            .await?;
+        return Ok(());
+    }
+
+    if let Some(mut cs) = state.chat_states.get_mut(&chat_id.0) {
+        cs.pending_post_analysis = None;
+    }
+
+    let session = if let Some(mg) = p.git {
+        state.worktree_session(user_id, mg).await
+    } else {
+        AskSession::new(user_id, None, None)
+    };
+    let session = match p.qa_context {
+        Some(ctx) => session.with_context(ctx),
+        None => session,
+    };
+
+    {
+        let mut entry = state.chat_states.entry(chat_id.0).or_default();
+        entry.ask_session = Some(session);
+    }
+
+    bot.send_message(
+        chat_id,
+        "Implementation session started. Send a message to begin.",
+    )
+    .await?;
+
+    Ok(())
 }
 
 pub async fn handle_solve(

@@ -30,8 +30,12 @@ pub enum AskMode {
 
 #[derive(Debug, Clone)]
 pub struct AskSession {
+    /// Telegram user_id that owns this session — used for worktree scoping.
+    pub user_id: i64,
     pub repo_path: Option<PathBuf>,
     pub git: Option<Arc<GitClient>>,
+    /// Present when `repo_path` is a per-user worktree; used for cleanup on session end.
+    pub main_git: Option<Arc<GitClient>>,
     pub history: Vec<HistoryEntry>,
     /// Whether the branch has been pushed (enables "Open PR" button)
     pub pushed: bool,
@@ -40,10 +44,12 @@ pub struct AskSession {
 }
 
 impl AskSession {
-    pub fn new(repo_path: Option<PathBuf>, git: Option<Arc<GitClient>>) -> Self {
+    pub fn new(user_id: i64, repo_path: Option<PathBuf>, git: Option<Arc<GitClient>>) -> Self {
         Self {
+            user_id,
             repo_path,
             git,
+            main_git: None,
             history: Vec::new(),
             pushed: false,
             context: None,
@@ -132,6 +138,18 @@ pub struct PendingGrill {
 }
 
 // ---------------------------------------------------------------------------
+// Post-analysis implement button state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PendingPostAnalysis {
+    pub issue_key: String,
+    pub git: Option<Arc<GitClient>>,
+    /// Q&A context from grill flow, if any.
+    pub qa_context: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Admin panel pending input
 // ---------------------------------------------------------------------------
 
@@ -217,6 +235,9 @@ pub struct ChatState {
 
     /// Active grill session — asking user clarifying questions one by one
     pub pending_grill: Option<PendingGrill>,
+
+    /// Analysis complete — waiting for user to click "Implement"
+    pub pending_post_analysis: Option<PendingPostAnalysis>,
 
     /// Active /permissions wizard
     pub pending_permissions: Option<PendingPermissions>,

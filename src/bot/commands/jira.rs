@@ -25,22 +25,22 @@ pub async fn handle_jira(bot: Bot, msg: Message, state: Arc<AppState>) -> Result
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     let has_user_jira = state.has_user_jira(user_id);
     let jira_account_label = if has_user_jira {
-        "🔧 My Jira ✓"
+        "⚙️ Settings ✓"
     } else {
-        "🔧 My Jira"
+        "⚙️ Settings"
     };
 
     let mut rows = vec![
         vec![
             InlineKeyboardButton::callback("🎫 My Tickets", "jira:my_tickets"),
-            InlineKeyboardButton::callback("✏️ Create Issue", "jira:create"),
+            InlineKeyboardButton::callback("✏️ Create Ticket", "jira:create"),
         ],
         vec![
-            InlineKeyboardButton::callback("🔀 Move Issue", "jira:move"),
+            InlineKeyboardButton::callback("🔀 Move Ticket", "jira:move"),
             InlineKeyboardButton::callback("💬 Add Comment", "jira:comment"),
         ],
         vec![InlineKeyboardButton::callback(
-            "✅ Solve Issue",
+            "✅ Solve Ticket",
             "jira:solve",
         )],
     ];
