@@ -670,7 +670,7 @@ async fn notify_admin_unauthorized(
 fn truncate_for_audit(text: &str) -> String {
     let mut s: String = text.chars().take(300).collect();
     if text.chars().count() > 300 {
-        s.push_str("…");
+        s.push('…');
     }
     s
 }
