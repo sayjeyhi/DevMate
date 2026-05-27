@@ -191,7 +191,11 @@ impl ClaudeClient {
         cmd
     }
 
-    pub async fn ask(&self, prompt: &str, opts: AskOptions) -> Result<(String, UsageInfo), AppError> {
+    pub async fn ask(
+        &self,
+        prompt: &str,
+        opts: AskOptions,
+    ) -> Result<(String, UsageInfo), AppError> {
         let timeout_ms = opts
             .timeout_ms
             .or(self.config.timeout_ms)
