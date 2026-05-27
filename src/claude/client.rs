@@ -103,11 +103,13 @@ impl ClaudeClient {
         if let Ok(host_home) = std::env::var("HOME") {
             let claude_dir = format!("{host_home}/.claude");
             if std::path::Path::new(&claude_dir).exists() {
-                cmd.args(["--ro-bind", &claude_dir, "/home/sandbox/.claude"]);
+                // read-write so Claude can persist session state and refresh OAuth tokens
+                cmd.args(["--bind", &claude_dir, "/home/sandbox/.claude"]);
             }
             let claude_json = format!("{host_home}/.claude.json");
             if std::path::Path::new(&claude_json).exists() {
-                cmd.args(["--ro-bind", &claude_json, "/home/sandbox/.claude.json"]);
+                // read-write so Claude can write refreshed OAuth tokens
+                cmd.args(["--bind", &claude_json, "/home/sandbox/.claude.json"]);
             }
         }
 
